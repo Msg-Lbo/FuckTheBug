@@ -48,11 +48,11 @@ cargo check --manifest-path src-tauri/Cargo.toml
 本项目不在开发电脑本地打包。发布前同步修改 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本号，然后推送对应标签：
 
 ```bash
-git tag v2.1.2
-git push origin v2.1.2
+git tag v2.1.3
+git push origin v2.1.3
 ```
 
-`v*` 标签会触发 GitHub Actions，在 Windows Runner 中构建 NSIS 安装包、签名更新包并创建 GitHub Release。应用通过设置页的“检查更新”读取最新 Release，验签通过后安装并自动重启。
+`v*` 标签会触发 GitHub Actions，在 Windows Runner 中构建 NSIS 安装包、签名更新包并创建 GitHub Release。Action 随后更新 `updater/latest.json` 中的稳定下载地址，应用通过设置页的“检查更新”读取该清单，验签通过后安装并自动重启。
 
 更新签名私钥和密码仅保存在仓库的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Secrets 中，禁止写入源码。
 

@@ -53,3 +53,28 @@ jobs:
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
+
+      - name: 发布稳定更新清单
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart("v")
+          $branch = "${{ github.event.repository.default_branch }}"
+          $manifestPath = Join-Path $env:RUNNER_TEMP "latest.json"
+          $installerUrl = "https://github.com/${{ github.repository }}/releases/download/$tag/FuckTheBug_${version}_x64-setup.exe"
+          gh release download $tag --pattern latest.json --dir $env:RUNNER_TEMP
+          $manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
+          $manifest.platforms.PSObject.Properties | ForEach-Object {
+            $_.Value.url = $installerUrl
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8NoBOM $manifestPath
+          gh release upload $tag $manifestPath --clobber
+          $manifestBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($manifestPath))
+          $currentFile = gh api "repos/${{ github.repository }}/contents/updater/latest.json?ref=$branch" | ConvertFrom-Json
+          gh api --method PUT "repos/${{ github.repository }}/contents/updater/latest.json" `
+            -f "message=chore: update manifest for $tag" `
+            -f "content=$manifestBase64" `
+            -f "branch=$branch" `
+            -f "sha=$($currentFile.sha)"

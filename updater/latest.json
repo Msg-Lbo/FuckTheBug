@@ -1,0 +1,15 @@
+{
+  "version": "2.1.2",
+  "notes": "Windows 安装包与签名在线更新文件由 GitHub Actions 自动生成。",
+  "pub_date": "2026-07-30T03:44:01.391Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcDV6MHRMNHllYkthVUJva0poamdKbVB1ODF2dGFsNEdWcVBsWDBmaFdsTGdJVTdLZCtyaTdnZTdHYVpFQjI5T3Z3U1B0TS9kRC8rc01Cb0loRFFvRDcyWkhSVEFVTGcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg1MzgzMDM4CWZpbGU6RnVja1RoZUJ1Z18yLjEuMl94NjQtc2V0dXAuZXhlCkpvcGF1bEF2UE5INUhCeTNZNTRUSTNFRFhrVEtCeUsrWWtDOFoySVV0OVNaVE5iS0JZV2RzandEZTg5UGgvM1NPeGdLU2xOeUxvcE5sdmp4ZWFmYUN3PT0K",
+      "url": "https://github.com/Msg-Lbo/FuckTheBug/releases/download/v2.1.2/FuckTheBug_2.1.2_x64-setup.exe"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcDV6MHRMNHllYkthVUJva0poamdKbVB1ODF2dGFsNEdWcVBsWDBmaFdsTGdJVTdLZCtyaTdnZTdHYVpFQjI5T3Z3U1B0TS9kRC8rc01Cb0loRFFvRDcyWkhSVEFVTGcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg1MzgzMDM4CWZpbGU6RnVja1RoZUJ1Z18yLjEuMl94NjQtc2V0dXAuZXhlCkpvcGF1bEF2UE5INUhCeTNZNTRUSTNFRFhrVEtCeUsrWWtDOFoySVV0OVNaVE5iS0JZV2RzandEZTg5UGgvM1NPeGdLU2xOeUxvcE5sdmp4ZWFmYUN3PT0K",
+      "url": "https://github.com/Msg-Lbo/FuckTheBug/releases/download/v2.1.2/FuckTheBug_2.1.2_x64-setup.exe"
+    }
+  }
+}
