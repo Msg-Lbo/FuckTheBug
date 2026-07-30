@@ -65,6 +65,8 @@ async function loadAppVersion(): Promise<void> {
 async function handleCheckUpdate(): Promise<void> {
   if (checkingUpdate.value || installingUpdate.value) return
   checkingUpdate.value = true
+  message.value = ''
+  errorMessage.value = ''
   updateMessage.value = ''
   updateError.value = ''
 
@@ -90,6 +92,8 @@ async function handleCheckUpdate(): Promise<void> {
 async function handleInstallUpdate(): Promise<void> {
   if (!pendingUpdate || installingUpdate.value) return
   installingUpdate.value = true
+  message.value = ''
+  errorMessage.value = ''
   updateProgress.value = 0
   updateMessage.value = `正在下载 v${pendingUpdate.version}`
   updateError.value = ''
@@ -201,6 +205,8 @@ async function handleTestConnection(): Promise<void> {
   testing.value = true
   message.value = ''
   errorMessage.value = ''
+  updateMessage.value = ''
+  updateError.value = ''
   try {
     const user = await testJiraConnection(config.value.jira.baseUrl, config.value.jira.token)
     message.value = `连接成功：${user.displayName}`
@@ -224,6 +230,8 @@ async function handleSave(): Promise<void> {
   saving.value = true
   message.value = ''
   errorMessage.value = ''
+  updateMessage.value = ''
+  updateError.value = ''
 
   try {
     config.value = await saveConfig(config.value)
