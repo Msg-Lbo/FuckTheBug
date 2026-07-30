@@ -1,6 +1,6 @@
 [package]
 name = "fuck-the-bug"
-version = "2.0.0"
+version = "2.1.0"
 description = "FuckTheBug JIRA问题单桌面追踪器"
 authors = []
 edition = "2024"
@@ -20,5 +20,7 @@ serde_json = "1"
 tauri = { version = "2.11.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-opener = "2.5.4"
+tauri-plugin-process = "2.3.1"
+tauri-plugin-updater = "2.10.1"
 url = "2"
 uuid = { version = "1.24.0", features = ["v4", "serde"] }

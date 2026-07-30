@@ -1,7 +1,7 @@
 {
   "name": "fuck-the-bug",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,8 @@
   "dependencies": {
     "@lucide/vue": "1.27.0",
     "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-process": "2.3.1",
+    "@tauri-apps/plugin-updater": "2.10.1",
     "vue": "3.5.40"
   },
   "devDependencies": {

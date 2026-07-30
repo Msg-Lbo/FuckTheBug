@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { CheckCircle2, Eye, EyeOff, KeyRound, Plus, Save, Trash2, Unplug, X } from '@lucide/vue'
+import { computed, onMounted, ref } from 'vue'
+import { getVersion } from '@tauri-apps/api/app'
+import { relaunch } from '@tauri-apps/plugin-process'
+import { check as checkForUpdate } from '@tauri-apps/plugin-updater'
+import { CheckCircle2, Download, Eye, EyeOff, KeyRound, Plus, RefreshCw, Save, Trash2, Unplug, X } from '@lucide/vue'
 import { closeSettingsWindow, getConfig, saveConfig, testJiraConnection } from '../api'
 import type { AppConfig, IssueView } from '../types'
 
@@ -14,6 +17,21 @@ const testing = ref(false) // 连接测试状态
 const tokenVisible = ref(false) // Token可见状态
 const message = ref('') // 操作提示
 const errorMessage = ref('') // 错误提示
+const appVersion = ref('') // 当前应用版本
+const availableVersion = ref('') // 可更新版本
+const updateMessage = ref('') // 更新提示
+const updateError = ref('') // 更新错误
+const checkingUpdate = ref(false) // 检查更新状态
+const installingUpdate = ref(false) // 安装更新状态
+const updateProgress = ref(0) // 更新下载进度
+let pendingUpdate: Awaited<ReturnType<typeof checkForUpdate>> = null // 待安装更新
+
+const updateButtonLabel = computed(() => {
+  if (installingUpdate.value) return updateProgress.value > 0 ? `正在下载 ${updateProgress.value}%` : '正在准备更新'
+  if (checkingUpdate.value) return '正在检查'
+  if (availableVersion.value) return `更新到 v${availableVersion.value}`
+  return '检查更新'
+})
 
 /**
  * 加载设置表单
@@ -28,6 +46,84 @@ async function loadConfig(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * 读取当前应用版本
+ */
+async function loadAppVersion(): Promise<void> {
+  try {
+    appVersion.value = await getVersion()
+  } catch (error) {
+    updateError.value = `无法读取应用版本：${String(error)}`
+  }
+}
+
+/**
+ * 检查GitHub Release更新
+ */
+async function handleCheckUpdate(): Promise<void> {
+  if (checkingUpdate.value || installingUpdate.value) return
+  checkingUpdate.value = true
+  updateMessage.value = ''
+  updateError.value = ''
+
+  try {
+    pendingUpdate = await checkForUpdate()
+    if (!pendingUpdate) {
+      availableVersion.value = ''
+      updateMessage.value = '当前已是最新版本'
+      return
+    }
+    availableVersion.value = pendingUpdate.version
+    updateMessage.value = `发现新版本 v${pendingUpdate.version}`
+  } catch (error) {
+    updateError.value = `检查更新失败：${String(error)}`
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+/**
+ * 下载并安装已发现的签名更新
+ */
+async function handleInstallUpdate(): Promise<void> {
+  if (!pendingUpdate || installingUpdate.value) return
+  installingUpdate.value = true
+  updateProgress.value = 0
+  updateMessage.value = `正在下载 v${pendingUpdate.version}`
+  updateError.value = ''
+  let downloaded = 0 // 已下载字节数
+  let contentLength = 0 // 更新包总字节数
+
+  try {
+    await pendingUpdate.downloadAndInstall((event) => {
+      if (event.event === 'Started') {
+        contentLength = event.data.contentLength ?? 0
+      } else if (event.event === 'Progress') {
+        downloaded += event.data.chunkLength
+        if (contentLength > 0) updateProgress.value = Math.min(99, Math.round(downloaded / contentLength * 100))
+      } else if (event.event === 'Finished') {
+        updateProgress.value = 100
+      }
+    })
+    updateMessage.value = '更新已安装，正在重启'
+    await relaunch()
+  } catch (error) {
+    updateError.value = `安装更新失败：${String(error)}`
+    installingUpdate.value = false
+  }
+}
+
+/**
+ * 根据更新状态执行检查或安装
+ */
+async function handleUpdateAction(): Promise<void> {
+  if (pendingUpdate) {
+    await handleInstallUpdate()
+    return
+  }
+  await handleCheckUpdate()
 }
 
 /**
@@ -140,7 +236,7 @@ async function handleSave(): Promise<void> {
   }
 }
 
-onMounted(() => void loadConfig())
+onMounted(() => void Promise.all([loadConfig(), loadAppVersion()]))
 </script>
 
 <template>
@@ -247,13 +343,25 @@ onMounted(() => void loadConfig())
     </section>
 
     <footer class="settings-footer">
-      <p v-if="errorMessage" class="form-message form-message--error">{{ errorMessage }}</p>
-      <p v-else-if="message" class="form-message form-message--success">
-        <CheckCircle2 :size="15" />
-        {{ message }}
-      </p>
-      <span v-else />
+      <div class="settings-footer__status">
+        <span class="app-version">FuckTheBug v{{ appVersion || '--' }}</span>
+        <p v-if="errorMessage" class="form-message form-message--error">{{ errorMessage }}</p>
+        <p v-else-if="updateError" class="form-message form-message--error">{{ updateError }}</p>
+        <p v-else-if="message" class="form-message form-message--success">
+          <CheckCircle2 :size="15" />
+          {{ message }}
+        </p>
+        <p v-else-if="updateMessage" class="form-message form-message--success">
+          <CheckCircle2 :size="15" />
+          {{ updateMessage }}
+        </p>
+      </div>
       <div class="settings-footer__actions">
+        <button class="command-button command-button--secondary update-button" type="button" :disabled="checkingUpdate || installingUpdate" @click="handleUpdateAction">
+          <Download v-if="availableVersion" :size="16" />
+          <RefreshCw v-else :class="{ spinning: checkingUpdate }" :size="16" />
+          {{ updateButtonLabel }}
+        </button>
         <button class="command-button command-button--secondary" type="button" @click="closeSettingsWindow">取消</button>
         <button class="command-button command-button--primary" type="button" :disabled="saving" @click="handleSave">
           <Save :size="17" />

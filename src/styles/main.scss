@@ -655,7 +655,7 @@ button {
 }
 
 .settings-footer {
-  min-height: 72px;
+  min-height: 78px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -664,10 +664,30 @@ button {
   background: #1b2024;
   border-top: 1px solid #2d3439;
 
+  &__status {
+    min-width: 0;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 5px;
+  }
+
   &__actions {
     display: flex;
+    flex: 0 0 auto;
+    align-items: center;
     gap: 8px;
   }
+}
+
+.app-version {
+  color: #7f8a92;
+  font-family: "Cascadia Mono", monospace;
+  font-size: 10px;
+}
+
+.update-button {
+  min-width: 132px;
 }
 
 .command-button {
@@ -784,6 +804,13 @@ button {
   .settings-header,
   .settings-toolbar,
   .settings-footer {
+    flex-wrap: wrap;
+
+    &__actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
     padding-right: 18px;
     padding-left: 18px;
   }

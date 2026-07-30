@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口和设置窗口仅允许监听后端配置事件",
+  "description": "主窗口和设置窗口允许监听配置事件并执行签名更新",
   "windows": ["main", "settings"],
-  "permissions": ["core:default", "core:event:allow-listen"]
+  "permissions": [
+    "core:default",
+    "core:event:allow-listen",
+    "updater:default",
+    "process:allow-restart"
+  ]
 }

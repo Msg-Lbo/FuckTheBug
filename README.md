@@ -9,6 +9,7 @@
 - Token 保存到系统凭据管理器，不写入源码或 JSON 配置
 - 悬浮计数器、问题单详情、手动刷新和外部跳转
 - 新问题单红灯提醒和安装版Windows原生通知
+- 设置页显示当前版本，支持签名在线更新和自动重启
 - 系统托盘显示、隐藏、设置和退出
 - 保存窗口位置，调整尺寸时限制在有效显示器内
 - 阻止同一视图并发请求，并显示明确的认证和网络错误
@@ -42,10 +43,17 @@ cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-## 打包
+## 发布
+
+本项目不在开发电脑本地打包。发布前同步修改 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本号，然后推送对应标签：
 
 ```bash
-npm run tauri:build
+git tag v2.1.0
+git push origin v2.1.0
 ```
+
+`v*` 标签会触发 GitHub Actions，在 Windows Runner 中构建 NSIS 安装包、签名更新包并创建 GitHub Release。应用通过设置页的“检查更新”读取最新 Release，验签通过后安装并自动重启。
+
+更新签名私钥和密码仅保存在仓库的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Secrets 中，禁止写入源码。
 
 配置保存在 Tauri 的用户配置目录。JIRA Token 仅保存在系统凭据管理器中，服务名为 `com.genata.bug-ticker`。
