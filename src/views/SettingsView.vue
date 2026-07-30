@@ -25,6 +25,7 @@ const checkingUpdate = ref(false) // 检查更新状态
 const installingUpdate = ref(false) // 安装更新状态
 const updateProgress = ref(0) // 更新下载进度
 let pendingUpdate: Awaited<ReturnType<typeof checkForUpdate>> = null // 待安装更新
+const updateTimeout = 120000 // 更新请求超时时间
 
 const updateButtonLabel = computed(() => {
   if (installingUpdate.value) return updateProgress.value > 0 ? `正在下载 ${updateProgress.value}%` : '正在准备更新'
@@ -71,7 +72,7 @@ async function handleCheckUpdate(): Promise<void> {
   updateError.value = ''
 
   try {
-    pendingUpdate = await checkForUpdate()
+    pendingUpdate = await checkForUpdate({ timeout: updateTimeout })
     if (!pendingUpdate) {
       availableVersion.value = ''
       updateMessage.value = '当前已是最新版本'
@@ -110,7 +111,7 @@ async function handleInstallUpdate(): Promise<void> {
       } else if (event.event === 'Finished') {
         updateProgress.value = 100
       }
-    })
+    }, { timeout: updateTimeout })
     updateMessage.value = '更新已安装，正在重启'
     await relaunch()
   } catch (error) {

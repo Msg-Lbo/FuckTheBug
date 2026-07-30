@@ -89,7 +89,14 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .header("User-Agent", "FuckTheBug-Updater")
+                .expect("更新请求User-Agent配置失败")
+                .header("Cache-Control", "no-cache")
+                .expect("更新请求缓存策略配置失败")
+                .build(),
+        )
         .plugin(
             tauri_plugin_opener::Builder::new()
                 .open_js_links_on_click(false)
