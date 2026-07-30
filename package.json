@@ -1,0 +1,29 @@
+{
+  "name": "fuck-the-bug",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "check": "npm run build && cargo check --manifest-path src-tauri/Cargo.toml",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml"
+  },
+  "dependencies": {
+    "@lucide/vue": "1.27.0",
+    "@tauri-apps/api": "2.11.1",
+    "vue": "3.5.40"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "@vitejs/plugin-vue": "6.0.8",
+    "sass": "1.102.0",
+    "typescript": "6.0.3",
+    "vite": "8.1.5",
+    "vue-tsc": "3.3.8"
+  }
+}

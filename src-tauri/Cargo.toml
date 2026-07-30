@@ -1,0 +1,24 @@
+[package]
+name = "fuck-the-bug"
+version = "2.0.0"
+description = "FuckTheBug JIRA问题单桌面追踪器"
+authors = []
+edition = "2024"
+
+[lib]
+name = "fuck_the_bug_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+keyring = "4.1.5"
+reqwest = { version = "0.13.4", features = ["json", "query"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.11.5", features = ["tray-icon", "image-png"] }
+tauri-plugin-notification = "2.3.3"
+tauri-plugin-opener = "2.5.4"
+url = "2"
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
