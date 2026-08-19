@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type CSSProperties } from 'vue'
+import type { IssueItem } from '../types'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { AlertCircle, ExternalLink, RefreshCw, Settings, X } from '@lucide/vue'
 import {
@@ -13,11 +13,6 @@ import {
   startMainDragging,
 } from '../api'
 import type { AppConfig, ViewRuntime } from '../types'
-
-const config = ref<AppConfig>({
-  jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
-  views: [],
-}) // 应用配置
 const activeViewId = ref<string | null>(null) // 当前展开视图
 const runtimeByView = reactive<Record<string, ViewRuntime>>({}) // 各视图运行状态
 const refreshTimers = new Map<string, number>() // 各视图刷新定时器
@@ -45,8 +40,7 @@ function createRuntime(): ViewRuntime {
   return {
     loading: false,
     initialized: false,
-    hasNewIssues: false,
-    count: 0,
+    stashedIssues: ref<IssueItem[]>([]), // 暂存问题单列表
     issues: [],
     error: '',
     updatedAt: null,
@@ -249,13 +243,52 @@ async function handleOpenExternal(url: string): Promise<void> {
 }
 
 /**
- * 格式化更新时间
- * @param date - 更新时间
- * @returns 时间文本
+ * 暂存问题单
+ * @param issueKey - 问题单 Key
  */
-function formatUpdatedAt(date: Date | null): string {
-  if (!date) return ''
-  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(date)
+function stashIssue(issueKey: string): void {
+  if (!activeRuntime.value) return
+  const issue = activeRuntime.value.issues.find((i) => i.key === issueKey)
+  if (!issue) return
+
+  // 已经在暂存列表中
+  if (stashedIssues.value.some((s) => s.key === issueKey)) {
+    return
+  }
+
+  stashedIssues.value = [issue, ...stashedIssues.value]
+  runtimeByView[activeViewId.value!].hasNewIssues = false
+  // 通知用户已暂存
+  void showToast(`问题单 ${issueKey} 已暂存`, 'success')
+}
+
+/**
+ * 取消暂存问题单
+ * @param issueKey - 问题单 Key
+ */
+function unstashIssue(issueKey: string): void {
+  stashedIssues.value = stashedIssues.value.filter((s) => s.key !== issueKey)
+  // 如果暂存列表为空，恢复当前视图的新问题提示
+  if (stashedIssues.value.length === 0 && activeViewId.value) {
+    const runtime = runtimeByView[activeViewId.value]
+    if (runtime) {
+      // 重新触发一次刷新来重新计算 hasNewIssues
+      void refreshView(activeViewId.value)
+    }
+  }
+}
+
+/**
+ * 清空所有暂存问题单
+ */
+function clearAllStashed(): void {
+  stashedIssues.value = []
+  // 恢复所有视图的新问题提示
+  Object.keys(runtimeByView).forEach((viewId) => {
+    const runtime = runtimeByView[viewId]
+    if (runtime) runtime.hasNewIssues = false
+  })
+  showToast('所有暂存问题单已清空', 'success')
 }
 
 /**
@@ -356,9 +389,94 @@ onBeforeUnmount(() => {
           <span>正在加载</span>
         </div>
 
+    <section v-if="activeView && activeRuntime" class="bug-panel">
+      <header class="bug-panel__header">
+        <div class="bug-panel__heading">
+          <strong>{{ activeView.name }}</strong>
+          <span v-if="activeRuntime.updatedAt">更新于 {{ formatUpdatedAt(activeRuntime.updatedAt) }}</span>
+        </div>
+        <div class="bug-panel__actions">
+          <button class="icon-button" type="button" title="刷新" aria-label="刷新" :disabled="activeRuntime.loading" @click="refreshView(activeView.id)">
+            <RefreshCw :size="17" :class="{ spinning: activeRuntime.loading }" />
+          </button>
+          <button class="icon-button" type="button" title="关闭" aria-label="关闭" @click="toggleView(activeView.id)">
+            <X :size="18" />
+          </button>
+        </div>
+      </header>
+
+      <div class="bug-panel__content">
+        <div v-if="activeRuntime.error" class="panel-state panel-state--error">
+          <AlertCircle :size="22" />
+          <span>{{ activeRuntime.error }}</span>
+          <button class="text-button" type="button" @click="refreshView(activeView.id)">重试</button>
+        </div>
+
+        <div v-else-if="activeRuntime.loading && !activeRuntime.initialized" class="panel-state">
+          <RefreshCw class="spinning" :size="22" />
+          <span>正在加载</span>
+        </div>
+
+    <section v-if="activeView && activeRuntime" class="bug-panel">
+      <header class="bug-panel__header">
+        <div class="bug-panel__heading">
+          <strong>{{ activeView.name }}</strong>
+          <span v-if="activeRuntime.updatedAt">更新于 {{ formatUpdatedAt(activeRuntime.updatedAt) }}</span>
+        </div>
+        <div class="bug-panel__actions">
+          <button class="icon-button" type="button" title="刷新" aria-label="刷新" :disabled="activeRuntime.loading" @click="refreshView(activeView.id)">
+            <RefreshCw :size="17" :class="{ spinning: activeRuntime.loading }" />
+          </button>
+          <button class="icon-button" type="button" title="关闭" aria-label="关闭" @click="toggleView(activeView.id)">
+            <X :size="18" />
+          </button>
+        </div>
+      </header>
+
+      <div class="bug-panel__content">
+        <div v-if="activeRuntime.error" class="panel-state panel-state--error">
+          <AlertCircle :size="22" />
+          <span>{{ activeRuntime.error }}</span>
+          <button class="text-button" type="button" @click="refreshView(activeView.id)">重试</button>
+        </div>
+
+        <div v-else-if="activeRuntime.loading && !activeRuntime.initialized" class="panel-state">
+          <RefreshCw class="spinning" :size="22" />
+          <span>正在加载</span>
+        </div>
+
         <div v-else-if="activeRuntime.issues.length === 0" class="panel-state panel-state--success">
           <span class="status-dot" />
           <span>当前没有符合条件的问题单</span>
+        </div>
+
+        <div v-else-if="stashedIssues.value.length > 0" class="stashed-section">
+          <h3 class="stashed-header">
+            暂存的问题单
+            <span class="stashed-count">（{{ stashedIssues.value.length }}）</span>
+          </h3>
+          <div class="stashed-list">
+            <button
+              v-for="issue in stashedIssues"
+              :key="issue.key"
+              class="bug-row stashed-row"
+              :style="getProjectStyle(issue.projectKey)"
+              @click="handleOpenExternal(issue.link)"
+              @contextmenu.prevent="unstashIssue(issue.key)"
+            >
+              <span class="bug-row__main">
+                <strong><span class="issue-key">{{ issue.key }}</span>{{ issue.title }}</strong>
+                <span class="bug-row__meta">
+                  <span class="project-tag" :title="issue.projectName">{{ issue.projectKey }}</span>
+                  <span v-if="issue.issueType">{{ issue.issueType }}</span>
+                  <span v-if="issue.status">{{ issue.status }}</span>
+                  <span v-if="issue.priority">{{ issue.priority }}</span>
+                </span>
+              </span>
+              <span class="unstash-btn" @click.stop="unstashIssue(issue.key)">取消暂存</span>
+              <ExternalLink :size="16" />
+            </button>
+          </div>
         </div>
 
         <button
@@ -369,6 +487,7 @@ onBeforeUnmount(() => {
           :style="getProjectStyle(issue.projectKey)"
           type="button"
           @click="handleOpenExternal(issue.link)"
+          @contextmenu.prevent="stashIssue(issue.key)"
         >
           <span class="bug-row__main">
             <strong><span class="issue-key">{{ issue.key }}</span>{{ issue.title }}</strong>
