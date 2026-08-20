@@ -28,6 +28,8 @@ export interface IssueItem {
   issueType: string
   status: string
   priority: string
+  versions: string[]
+  platforms: string[]
   updated: string
 }
 

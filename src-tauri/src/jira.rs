@@ -10,6 +10,28 @@ use crate::{
     storage::{AppState, normalize_base_url, read_jira_token},
 };
 
+/// 从问题单字段文本中归纳移动平台。
+///
+/// # 参数
+/// * `source` - 版本、组件、标签和标题组成的文本
+///
+/// # 返回值
+/// 标准化的平台名称列表
+fn extract_platforms(source: &str) -> Vec<String> {
+    let normalized = source.to_lowercase(); // 统一用于匹配的平台文本
+    let mut platforms = Vec::new(); // 归一化平台列表
+    if normalized.contains("android") || normalized.contains("安卓") {
+        platforms.push("Android".to_string());
+    }
+    if normalized
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .any(|segment| segment == "ios")
+    {
+        platforms.push("iOS".to_string());
+    }
+    platforms
+}
+
 /// 查询指定JQL视图的问题单。
 #[tauri::command]
 pub async fn fetch_issues(
@@ -114,38 +136,67 @@ async fn fetch_issues_inner(
     };
     let token = read_jira_token()?; // JIRA访问Token
     let url = format!("{}/rest/api/2/search", jira.base_url); // JIRA搜索接口
-    let response = state
-        .http_client
-        .get(url)
-        .bearer_auth(token)
-        .query(&[
-            ("jql", view.jql.as_str()),
-            ("startAt", "0"),
-            ("maxResults", "100"),
-            (
-                "fields",
-                "summary,project,status,priority,issuetype,updated",
-            ),
-        ])
-        .send()
-        .await
-        .map_err(|error| format!("无法连接JIRA：{error}"))?;
+    let mut start_at = 0; // 当前分页起始位置
+    let mut jira_issues = Vec::new(); // 全部分页问题单
+    let total = loop {
+        let start_at_text = start_at.to_string(); // 分页起始位置参数
+        let response = state
+            .http_client
+            .get(&url)
+            .bearer_auth(&token)
+            .query(&[
+                ("jql", view.jql.as_str()),
+                ("startAt", start_at_text.as_str()),
+                ("maxResults", "100"),
+                (
+                    "fields",
+                    "summary,project,status,priority,issuetype,fixVersions,components,labels,updated",
+                ),
+            ])
+            .send()
+            .await
+            .map_err(|error| format!("无法连接JIRA：{error}"))?;
 
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err("JIRA认证失败，请在设置中更新Token".to_string());
-    }
-    let response = response
-        .error_for_status()
-        .map_err(|error| format!("JIRA查询失败：{error}"))?;
-    let search: JiraSearchResponse = response
-        .json()
-        .await
-        .map_err(|error| format!("无法解析JIRA响应：{error}"))?;
-    let issues = search
-        .issues
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("JIRA认证失败，请在设置中更新Token".to_string());
+        }
+        let response = response
+            .error_for_status()
+            .map_err(|error| format!("JIRA查询失败：{error}"))?;
+        let mut search: JiraSearchResponse = response
+            .json()
+            .await
+            .map_err(|error| format!("无法解析JIRA响应：{error}"))?;
+        let total = search.total; // JIRA问题单总数
+        let page_size = search.issues.len(); // 当前分页实际条数
+        if page_size == 0 && jira_issues.len() < total {
+            return Err(format!(
+                "JIRA分页返回异常：已获取{}条，总数{total}条",
+                jira_issues.len()
+            ));
+        }
+        jira_issues.append(&mut search.issues);
+        if jira_issues.len() >= total {
+            break total;
+        }
+        start_at += page_size;
+    };
+    let issues = jira_issues
         .into_iter()
         .map(|issue| {
             let fields = issue.fields; // 当前问题单字段
+            let versions = fields
+                .fix_versions
+                .iter()
+                .map(|field| field.name.clone())
+                .collect(); // 问题单版本列表
+            let platform_source = std::iter::once(fields.summary.as_str())
+                .chain(fields.fix_versions.iter().map(|field| field.name.as_str()))
+                .chain(fields.components.iter().map(|field| field.name.as_str()))
+                .chain(fields.labels.iter().map(String::as_str))
+                .collect::<Vec<_>>()
+                .join(" "); // 平台识别文本
+            let platforms = extract_platforms(&platform_source); // 归一化平台列表
             IssueItem {
                 link: format!("{}/browse/{}", jira.base_url, issue.key),
                 key: issue.key,
@@ -155,6 +206,8 @@ async fn fetch_issues_inner(
                 issue_type: fields.issuetype.map(|field| field.name).unwrap_or_default(),
                 status: fields.status.map(|field| field.name).unwrap_or_default(),
                 priority: fields.priority.map(|field| field.name).unwrap_or_default(),
+                versions,
+                platforms,
                 updated: fields.updated.unwrap_or_default(),
             }
         })
@@ -163,7 +216,19 @@ async fn fetch_issues_inner(
     Ok(IssueResponse {
         view_id: view.id,
         view_name: view.name,
-        count: search.total,
+        count: total,
         issues,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_platforms;
+
+    #[test]
+    fn extracts_and_normalizes_mobile_platforms() {
+        assert_eq!(extract_platforms("Android 15 iOS-App"), ["Android", "iOS"]);
+        assert_eq!(extract_platforms("安卓客户端"), ["Android"]);
+        assert!(extract_platforms("BIOS 设置").is_empty());
+    }
 }

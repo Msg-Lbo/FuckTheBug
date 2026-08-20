@@ -23,6 +23,8 @@ const config = ref<AppConfig>({
 }) // 应用配置
 const activeViewId = ref<string | null>(null) // 当前展开视图
 const runtimeByView = reactive<Record<string, ViewRuntime>>({}) // 各视图运行状态
+const versionFilterByView = reactive<Record<string, string>>({}) // 各视图版本筛选
+const platformFilterByView = reactive<Record<string, string>>({}) // 各视图平台筛选
 const refreshTimers = new Map<string, number>() // 各视图刷新定时器
 const loadError = ref('') // 配置加载错误
 let unlistenConfig: UnlistenFn | null = null // 配置事件解绑函数
@@ -39,6 +41,34 @@ const projectPalette = [
 
 const activeView = computed(() => config.value.views.find((view) => view.id === activeViewId.value) ?? null)
 const activeRuntime = computed(() => activeView.value ? runtimeByView[activeView.value.id] : null)
+const activeVersionFilter = computed({
+  get: () => activeViewId.value ? versionFilterByView[activeViewId.value] ?? '' : '',
+  set: (value: string) => {
+    if (activeViewId.value) versionFilterByView[activeViewId.value] = value
+  },
+}) // 当前视图版本筛选
+const activePlatformFilter = computed({
+  get: () => activeViewId.value ? platformFilterByView[activeViewId.value] ?? '' : '',
+  set: (value: string) => {
+    if (activeViewId.value) platformFilterByView[activeViewId.value] = value
+  },
+}) // 当前视图平台筛选
+const activeVersionOptions = computed(() => {
+  const versions = activeRuntime.value?.issues.flatMap((issue) => issue.versions ?? []) ?? [] // 当前列表全部版本
+  return [...new Set(versions)].sort((left, right) => left.localeCompare(right, 'zh-CN', { numeric: true }))
+})
+const activePlatformOptions = computed(() => {
+  const platforms = activeRuntime.value?.issues.flatMap((issue) => issue.platforms ?? []) ?? [] // 当前列表全部平台
+  return ['Android', 'iOS'].filter((platform) => platforms.includes(platform))
+})
+const activeVisibleIssues = computed(() => {
+  if (!activeRuntime.value) return []
+  return activeRuntime.value.issues.filter((issue) => {
+    const matchesVersion = !activeVersionFilter.value || (issue.versions ?? []).includes(activeVersionFilter.value) // 版本是否匹配
+    const matchesPlatform = !activePlatformFilter.value || (issue.platforms ?? []).includes(activePlatformFilter.value) // 平台是否匹配
+    return matchesVersion && matchesPlatform
+  })
+})
 
 /**
  * 创建问题单视图运行状态
@@ -67,6 +97,18 @@ function syncViewRuntime(view: IssueView): void {
   runtimeByView[view.id].count = view.issues.length
   runtimeByView[view.id].initialized = true
   runtimeByView[view.id].updatedAt = null
+}
+
+/**
+ * 清理当前列表中已经不存在的筛选值
+ * @param viewId - 视图标识
+ */
+function normalizeViewFilters(viewId: string): void {
+  const issues = runtimeByView[viewId]?.issues ?? [] // 当前视图完整列表
+  const versions = new Set(issues.flatMap((issue) => issue.versions ?? [])) // 可用版本
+  const platforms = new Set(issues.flatMap((issue) => issue.platforms ?? [])) // 可用平台
+  if (versionFilterByView[viewId] && !versions.has(versionFilterByView[viewId])) versionFilterByView[viewId] = ''
+  if (platformFilterByView[viewId] && !platforms.has(platformFilterByView[viewId])) platformFilterByView[viewId] = ''
 }
 
 /**
@@ -99,6 +141,7 @@ function removeIssueFromJiraRuntimes(issueKey: string): void {
     if (!runtime) return
     runtime.issues = runtime.issues.filter((issue) => issue.key !== issueKey)
     runtime.count = runtime.issues.length
+    normalizeViewFilters(view.id)
   })
 }
 
@@ -147,7 +190,10 @@ async function loadConfig(): Promise<void> {
     loadError.value = ''
 
     Object.keys(runtimeByView).forEach((viewId) => {
-      if (!nextConfig.views.some((view) => view.id === viewId)) delete runtimeByView[viewId]
+      if (nextConfig.views.some((view) => view.id === viewId)) return
+      delete runtimeByView[viewId]
+      delete versionFilterByView[viewId]
+      delete platformFilterByView[viewId]
     })
 
     nextConfig.views.forEach(syncViewRuntime)
@@ -192,6 +238,7 @@ async function refreshView(viewId: string): Promise<void> {
     }
     runtime.count = visibleIssues.length
     runtime.issues = visibleIssues
+    normalizeViewFilters(viewId)
     runtime.initialized = true
     runtime.updatedAt = new Date()
   } catch (error) {
@@ -473,18 +520,30 @@ onBeforeUnmount(() => {
         </div>
 
         <template v-else>
+          <div v-if="activeView.kind === 'jira' && activeRuntime.issues.length > 0" class="filter-toolbar">
+            <select v-model="activeVersionFilter" aria-label="按版本筛选" title="按版本筛选">
+              <option value="">全部版本</option>
+              <option v-for="version in activeVersionOptions" :key="version" :value="version">{{ version }}</option>
+            </select>
+            <select v-model="activePlatformFilter" aria-label="按平台筛选" title="按平台筛选">
+              <option value="">全部平台</option>
+              <option v-for="platform in activePlatformOptions" :key="platform" :value="platform">{{ platform }}</option>
+            </select>
+            <span>{{ activeVisibleIssues.length }} / {{ activeRuntime.issues.length }}</span>
+          </div>
+
           <div v-if="activeView.kind === 'stash' && activeRuntime.issues.length > 0" class="stash-toolbar">
             <span>本地暂存 {{ activeRuntime.issues.length }} 条</span>
             <button class="text-button" type="button" @click="clearAllStashed">清空暂存</button>
           </div>
 
-          <div v-if="activeRuntime.issues.length === 0" class="panel-state panel-state--success">
+          <div v-if="activeVisibleIssues.length === 0" class="panel-state panel-state--success">
             <span class="status-dot" />
-            <span>{{ activeView.kind === 'stash' ? '暂存视图为空' : '当前没有符合条件的问题单' }}</span>
+            <span>{{ activeView.kind === 'stash' ? '暂存视图为空' : activeRuntime.issues.length > 0 ? '没有符合筛选条件的问题单' : '当前没有符合条件的问题单' }}</span>
           </div>
 
           <button
-            v-for="issue in activeRuntime.issues"
+            v-for="issue in activeVisibleIssues"
             :key="issue.key"
             class="bug-row"
             :style="getProjectStyle(issue.projectKey)"
@@ -500,6 +559,8 @@ onBeforeUnmount(() => {
                 <span v-if="issue.issueType">{{ issue.issueType }}</span>
                 <span v-if="issue.status">{{ issue.status }}</span>
                 <span v-if="issue.priority">{{ issue.priority }}</span>
+                <span v-for="version in issue.versions ?? []" :key="`version-${version}`">{{ version }}</span>
+                <span v-for="platform in issue.platforms ?? []" :key="`platform-${platform}`">{{ platform }}</span>
               </span>
             </span>
             <span v-if="activeView.kind === 'jira'" class="stash-action" title="暂存问题单" role="button" tabindex="0" @click.stop="stashIssue(issue.key)" @keydown.enter.stop="stashIssue(issue.key)">

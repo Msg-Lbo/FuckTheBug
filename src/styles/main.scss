@@ -24,7 +24,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
   letter-spacing: 0;
 }
@@ -407,6 +408,49 @@ button {
   padding: 0 6px 6px;
   color: #8f9aa2;
   font-size: 11px;
+}
+
+.filter-toolbar {
+  position: sticky;
+  top: -8px;
+  z-index: 2;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  margin: -8px -8px 8px;
+  padding: 8px;
+  background: #171b1e;
+  border-bottom: 1px solid #30373d;
+
+  select {
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0 28px 0 9px;
+    overflow: hidden;
+    color: #d8dde0;
+    text-overflow: ellipsis;
+    background: #20252a;
+    border: 1px solid #394148;
+    border-radius: 5px;
+    outline: none;
+    cursor: pointer;
+
+    &:focus {
+      border-color: #6698c5;
+      box-shadow: 0 0 0 2px rgb(102 152 197 / 14%);
+    }
+  }
+
+  > span {
+    min-width: 38px;
+    color: #7f8a92;
+    font-family: "Cascadia Mono", monospace;
+    font-size: 10px;
+    text-align: right;
+  }
 }
 
 .unstash-btn {

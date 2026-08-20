@@ -121,6 +121,12 @@ pub struct JiraIssueFields {
     pub status: Option<JiraNamedField>,
     pub priority: Option<JiraNamedField>,
     pub issuetype: Option<JiraNamedField>,
+    #[serde(default, rename = "fixVersions")]
+    pub fix_versions: Vec<JiraNamedField>,
+    #[serde(default)]
+    pub components: Vec<JiraNamedField>,
+    #[serde(default)]
+    pub labels: Vec<String>,
     pub updated: Option<String>,
 }
 
@@ -149,6 +155,10 @@ pub struct IssueItem {
     pub issue_type: String,
     pub status: String,
     pub priority: String,
+    #[serde(default)]
+    pub versions: Vec<String>,
+    #[serde(default)]
+    pub platforms: Vec<String>,
     pub updated: String,
 }
 
@@ -236,6 +246,8 @@ mod tests {
                 issue_type: "Bug".to_string(),
                 status: "待处理".to_string(),
                 priority: "High".to_string(),
+                versions: vec!["2.1.6".to_string()],
+                platforms: vec!["Android".to_string()],
                 updated: "2026-08-20T00:00:00Z".to_string(),
             }],
         };
@@ -244,5 +256,18 @@ mod tests {
 
         assert_eq!(decoded.kind, IssueViewKind::Stash);
         assert_eq!(decoded.issues[0].key, "BUG-1");
+        assert_eq!(decoded.issues[0].versions, ["2.1.6"]);
+        assert_eq!(decoded.issues[0].platforms, ["Android"]);
+    }
+
+    #[test]
+    fn legacy_stashed_issue_defaults_new_filter_fields() {
+        let issue: IssueItem = serde_json::from_str(
+            r#"{"title":"旧问题","link":"https://jira.example.com/browse/BUG-2","key":"BUG-2","projectKey":"BUG","projectName":"缺陷","issueType":"Bug","status":"待处理","priority":"High","updated":""}"#,
+        )
+        .expect("旧暂存问题单应可读取");
+
+        assert!(issue.versions.is_empty());
+        assert!(issue.platforms.is_empty());
     }
 }

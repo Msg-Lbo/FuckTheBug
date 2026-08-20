@@ -1,6 +1,6 @@
 [package]
 name = "fuck-the-bug"
-version = "2.1.6"
+version = "2.1.7"
 description = "FuckTheBug JIRA问题单桌面追踪器"
 authors = []
 edition = "2024"
