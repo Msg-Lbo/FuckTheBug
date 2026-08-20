@@ -378,6 +378,26 @@ button {
   font-weight: 700;
 }
 
+.stash-action {
+  display: inline-grid;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  color: #8da8bd;
+  border: 1px solid #3b464e;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: #c4e2f7;
+    background: #303a42;
+    border-color: #60809a;
+    outline: none;
+  }
+}
+
 .panel-state {
   min-height: 180px;
   display: flex;

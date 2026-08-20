@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type CSSProperties } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { AlertCircle, ExternalLink, RefreshCw, Settings, X } from '@lucide/vue'
+import { Archive, AlertCircle, ExternalLink, RefreshCw, Settings, X } from '@lucide/vue'
 import {
   fetchIssues,
   getConfig,
@@ -268,6 +268,18 @@ function stashIssue(issueKey: string): void {
 }
 
 /**
+ * 处理问题单右键按下事件
+ * @param event - 鼠标事件
+ * @param issueKey - 问题单 Key
+ */
+function handleIssueMouseDown(event: MouseEvent, issueKey: string): void {
+  if (event.button !== 2) return
+  event.preventDefault()
+  event.stopPropagation()
+  stashIssue(issueKey)
+}
+
+/**
  * 取消暂存问题单
  * @param issueKey - 问题单 Key
  */
@@ -403,11 +415,6 @@ onBeforeUnmount(() => {
           <span>正在加载</span>
         </div>
 
-        <div v-else-if="activeRuntime.issues.length === 0" class="panel-state panel-state--success">
-          <span class="status-dot" />
-          <span>当前没有符合条件的问题单</span>
-        </div>
-
         <template v-else>
           <div v-if="stashedIssues.length > 0" class="stashed-section">
             <h3 class="stashed-header">
@@ -422,6 +429,7 @@ onBeforeUnmount(() => {
                 :style="getProjectStyle(issue.projectKey)"
                 type="button"
                 @click="handleOpenExternal(issue.link)"
+                @mousedown="handleIssueMouseDown($event, issue.key)"
                 @contextmenu.prevent="unstashIssue(issue.key)"
               >
                 <span class="bug-row__main">
@@ -440,6 +448,11 @@ onBeforeUnmount(() => {
             <button class="text-button" type="button" @click="clearAllStashed">清空暂存</button>
           </div>
 
+          <div v-if="activeRuntime.issues.length === 0" class="panel-state panel-state--success">
+            <span class="status-dot" />
+            <span>当前没有符合条件的问题单</span>
+          </div>
+
           <button
             v-for="issue in activeRuntime.issues"
             :key="issue.key"
@@ -447,6 +460,7 @@ onBeforeUnmount(() => {
             :style="getProjectStyle(issue.projectKey)"
             type="button"
             @click="handleOpenExternal(issue.link)"
+            @mousedown="handleIssueMouseDown($event, issue.key)"
             @contextmenu.prevent="stashIssue(issue.key)"
           >
             <span class="bug-row__main">
@@ -457,6 +471,9 @@ onBeforeUnmount(() => {
                 <span v-if="issue.status">{{ issue.status }}</span>
                 <span v-if="issue.priority">{{ issue.priority }}</span>
               </span>
+            </span>
+            <span class="stash-action" title="暂存问题单" role="button" tabindex="0" @click.stop="stashIssue(issue.key)" @keydown.enter.stop="stashIssue(issue.key)">
+              <Archive :size="15" />
             </span>
             <ExternalLink :size="16" />
           </button>
