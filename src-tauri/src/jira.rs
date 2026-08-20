@@ -107,12 +107,15 @@ fn normalize_version_candidate(token: &str) -> String {
 
 /// 判断文本是否为多段版本号。
 fn is_version_number(value: &str) -> bool {
-    value
+    let parts = value
         .trim_start_matches(['V', 'v'])
         .split(['.', '-', '_'])
         .filter(|part| !part.is_empty())
-        .count()
-        >= 2
+        .collect::<Vec<_>>(); // 版本号分段
+    (2..=3).contains(&parts.len())
+        && parts
+            .iter()
+            .all(|part| part.chars().all(|character| character.is_ascii_digit()))
 }
 
 /// 从描述文本中提取版本号。
@@ -380,5 +383,6 @@ mod tests {
             ["1.2.3", "2.0.0"]
         );
         assert!(extract_versions("2026-08-11-16-05-14-808").is_empty());
+        assert!(extract_versions("版本\n\n2026-08-10-20-23-23-799").is_empty());
     }
 }
