@@ -81,6 +81,35 @@ function applyStashView(stashView: IssueView): void {
 }
 
 /**
+ * 获取当前已暂存的问题单标识
+ * @returns 暂存问题单 Key 集合
+ */
+function getStashedIssueKeys(): Set<string> {
+  const stashView = config.value.views.find((view) => view.kind === 'stash') // 暂存视图
+  return new Set(stashView?.issues.map((issue) => issue.key) ?? [])
+}
+
+/**
+ * 从所有JIRA视图运行状态中移除已暂存问题单
+ * @param issueKey - 问题单 Key
+ */
+function removeIssueFromJiraRuntimes(issueKey: string): void {
+  config.value.views.filter((view) => view.kind === 'jira').forEach((view) => {
+    const runtime = runtimeByView[view.id]
+    if (!runtime) return
+    runtime.issues = runtime.issues.filter((issue) => issue.key !== issueKey)
+    runtime.count = runtime.issues.length
+  })
+}
+
+/**
+ * 刷新全部JIRA视图
+ */
+async function refreshJiraViews(): Promise<void> {
+  await Promise.all(config.value.views.filter((view) => view.kind === 'jira').map((view) => refreshView(view.id)))
+}
+
+/**
  * 计算悬浮窗口折叠宽度
  * @returns 逻辑像素宽度
  */
@@ -151,16 +180,18 @@ async function refreshView(viewId: string): Promise<void> {
 
   try {
     const result = await fetchIssues(viewId)
+    const stashedKeys = getStashedIssueKeys() // 需要从JIRA视图隐藏的本地问题单
+    const visibleIssues = result.issues.filter((issue) => !stashedKeys.has(issue.key)) // 过滤已暂存问题单
     const knownIssueKeys = new Set(runtime.issues.map((issue) => issue.key)) // 刷新前的问题单标识
-    const newIssues = result.issues.filter((issue) => !knownIssueKeys.has(issue.key)) // 新增问题单
-    const addedCount = Math.max(result.count - runtime.count, newIssues.length) // 新增问题单数量
+    const newIssues = visibleIssues.filter((issue) => !knownIssueKeys.has(issue.key)) // 新增问题单
+    const addedCount = Math.max(visibleIssues.length - runtime.count, newIssues.length) // 新增问题单数量
     const hasAddedIssue = addedCount > 0 // 是否存在新增问题单
     if (runtime.initialized && activeViewId.value !== viewId && hasAddedIssue) {
       runtime.hasNewIssues = true
       void notifyNewIssues(result.viewName, addedCount, newIssues)
     }
-    runtime.count = result.count
-    runtime.issues = result.issues
+    runtime.count = visibleIssues.length
+    runtime.issues = visibleIssues
     runtime.initialized = true
     runtime.updatedAt = new Date()
   } catch (error) {
@@ -284,6 +315,7 @@ async function stashIssue(issueKey: string): Promise<void> {
   if (!issue) return
   try {
     applyStashView(await persistStashedIssue(issue))
+    removeIssueFromJiraRuntimes(issueKey)
     if (activeViewId.value && runtimeByView[activeViewId.value]) {
       runtimeByView[activeViewId.value].hasNewIssues = false
     }
@@ -314,6 +346,7 @@ function handleIssueMouseDown(event: MouseEvent, issueKey: string): void {
 async function unstashIssue(issueKey: string): Promise<void> {
   try {
     applyStashView(await persistUnstashedIssue(issueKey))
+    await refreshJiraViews()
   } catch (error) {
     if (activeRuntime.value) activeRuntime.value.error = String(error)
   }
@@ -325,6 +358,7 @@ async function unstashIssue(issueKey: string): Promise<void> {
 async function clearAllStashed(): Promise<void> {
   try {
     applyStashView(await clearStashedIssues())
+    await refreshJiraViews()
   } catch (error) {
     if (activeRuntime.value) activeRuntime.value.error = String(error)
   }
