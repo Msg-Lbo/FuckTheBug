@@ -9,7 +9,9 @@ export interface JiraConfig {
 export interface IssueView {
   id: string
   name: string
+  kind: 'jira' | 'stash'
   jql: string
+  issues: IssueItem[]
 }
 
 export interface AppConfig {

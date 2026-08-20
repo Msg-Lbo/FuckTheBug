@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type CSS
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { Archive, AlertCircle, ExternalLink, RefreshCw, Settings, X } from '@lucide/vue'
 import {
+  clearStashedIssues,
   fetchIssues,
   getConfig,
   openExternal,
@@ -10,9 +11,11 @@ import {
   resizeMainWindow,
   saveMainWindowPosition,
   sendSystemNotification,
+  stashIssue as persistStashedIssue,
   startMainDragging,
+  unstashIssue as persistUnstashedIssue,
 } from '../api'
-import type { AppConfig, IssueItem, ViewRuntime } from '../types'
+import type { AppConfig, IssueView, ViewRuntime } from '../types'
 
 const config = ref<AppConfig>({
   jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
@@ -22,7 +25,6 @@ const activeViewId = ref<string | null>(null) // 当前展开视图
 const runtimeByView = reactive<Record<string, ViewRuntime>>({}) // 各视图运行状态
 const refreshTimers = new Map<string, number>() // 各视图刷新定时器
 const loadError = ref('') // 配置加载错误
-const stashedIssues = ref<IssueItem[]>([]) // 暂存问题单列表
 let unlistenConfig: UnlistenFn | null = null // 配置事件解绑函数
 let dragState: { viewId: string; startX: number; startY: number; moved: boolean } | null = null // 拖动状态
 const notificationWelcomeKey = 'fuck-the-bug:notification-welcome:v1' // 原生通知启用提示标识
@@ -55,6 +57,30 @@ function createRuntime(): ViewRuntime {
 }
 
 /**
+ * 将视图配置同步到运行状态
+ * @param view - 问题单视图
+ */
+function syncViewRuntime(view: IssueView): void {
+  runtimeByView[view.id] ??= createRuntime()
+  if (view.kind !== 'stash') return
+  runtimeByView[view.id].issues = view.issues
+  runtimeByView[view.id].count = view.issues.length
+  runtimeByView[view.id].initialized = true
+  runtimeByView[view.id].updatedAt = null
+}
+
+/**
+ * 更新本地暂存视图配置和运行状态
+ * @param stashView - 暂存视图
+ */
+function applyStashView(stashView: IssueView): void {
+  const index = config.value.views.findIndex((view) => view.id === stashView.id) // 暂存视图索引
+  if (index === -1) config.value.views.push(stashView)
+  else config.value.views[index] = stashView
+  syncViewRuntime(stashView)
+}
+
+/**
  * 计算悬浮窗口折叠宽度
  * @returns 逻辑像素宽度
  */
@@ -76,7 +102,7 @@ function clearRefreshTimers(): void {
  */
 function scheduleRefreshes(): void {
   clearRefreshTimers()
-  config.value.views.forEach((view) => {
+  config.value.views.filter((view) => view.kind === 'jira').forEach((view) => {
     const timer = window.setInterval(() => void refreshView(view.id), config.value.jira.refreshInterval * 60_000)
     refreshTimers.set(view.id, timer)
   })
@@ -95,9 +121,7 @@ async function loadConfig(): Promise<void> {
       if (!nextConfig.views.some((view) => view.id === viewId)) delete runtimeByView[viewId]
     })
 
-    nextConfig.views.forEach((view) => {
-      runtimeByView[view.id] ??= createRuntime()
-    })
+    nextConfig.views.forEach(syncViewRuntime)
 
     if (activeViewId.value && !nextConfig.views.some((view) => view.id === activeViewId.value)) {
       activeViewId.value = null
@@ -106,7 +130,7 @@ async function loadConfig(): Promise<void> {
     scheduleRefreshes()
     await nextTick()
     await resizeForCurrentState()
-    await Promise.all(nextConfig.views.map((view) => refreshView(view.id)))
+    await Promise.all(nextConfig.views.filter((view) => view.kind === 'jira').map((view) => refreshView(view.id)))
   } catch (error) {
     loadError.value = String(error)
     await resizeMainWindow(320, 88)
@@ -119,7 +143,8 @@ async function loadConfig(): Promise<void> {
  */
 async function refreshView(viewId: string): Promise<void> {
   const runtime = runtimeByView[viewId] // 当前运行状态
-  if (!runtime || runtime.loading) return
+  const view = config.value.views.find((item) => item.id === viewId) // 当前视图配置
+  if (!runtime || !view || view.kind !== 'jira' || runtime.loading) return
 
   runtime.loading = true
   runtime.error = ''
@@ -164,7 +189,7 @@ async function toggleView(viewId: string): Promise<void> {
   activeViewId.value = activeViewId.value === viewId ? null : viewId
   await nextTick()
   await resizeForCurrentState()
-  if (activeViewId.value) await refreshView(activeViewId.value)
+  if (activeView.value?.kind === 'jira') await refreshView(activeView.value.id)
 }
 
 /**
@@ -250,21 +275,23 @@ async function handleOpenExternal(url: string): Promise<void> {
 }
 
 /**
- * 暂存问题单
+ * 将问题单加入持久化暂存视图
  * @param issueKey - 问题单 Key
  */
-function stashIssue(issueKey: string): void {
+async function stashIssue(issueKey: string): Promise<void> {
   if (!activeRuntime.value) return
-  const issue = activeRuntime.value.issues.find((i) => i.key === issueKey)
+  const issue = activeRuntime.value.issues.find((item) => item.key === issueKey) // 待暂存问题单
   if (!issue) return
-
-  // 已经在暂存列表中
-  if (stashedIssues.value.some((s) => s.key === issueKey)) {
-    return
+  try {
+    applyStashView(await persistStashedIssue(issue))
+    if (activeViewId.value && runtimeByView[activeViewId.value]) {
+      runtimeByView[activeViewId.value].hasNewIssues = false
+    }
+    await nextTick()
+    await resizeForCurrentState()
+  } catch (error) {
+    activeRuntime.value.error = String(error)
   }
-
-  stashedIssues.value = [issue, ...stashedIssues.value]
-  runtimeByView[activeViewId.value!].hasNewIssues = false
 }
 
 /**
@@ -276,35 +303,31 @@ function handleIssueMouseDown(event: MouseEvent, issueKey: string): void {
   if (event.button !== 2) return
   event.preventDefault()
   event.stopPropagation()
-  stashIssue(issueKey)
+  if (activeView.value?.kind === 'stash') void unstashIssue(issueKey)
+  else void stashIssue(issueKey)
 }
 
 /**
  * 取消暂存问题单
  * @param issueKey - 问题单 Key
  */
-function unstashIssue(issueKey: string): void {
-  stashedIssues.value = stashedIssues.value.filter((s) => s.key !== issueKey)
-  // 如果暂存列表为空，恢复当前视图的新问题提示
-  if (stashedIssues.value.length === 0 && activeViewId.value) {
-    const runtime = runtimeByView[activeViewId.value]
-    if (runtime) {
-      // 重新触发一次刷新来重新计算 hasNewIssues
-      void refreshView(activeViewId.value)
-    }
+async function unstashIssue(issueKey: string): Promise<void> {
+  try {
+    applyStashView(await persistUnstashedIssue(issueKey))
+  } catch (error) {
+    if (activeRuntime.value) activeRuntime.value.error = String(error)
   }
 }
 
 /**
  * 清空所有暂存问题单
  */
-function clearAllStashed(): void {
-  stashedIssues.value = []
-  // 恢复所有视图的新问题提示
-  Object.keys(runtimeByView).forEach((viewId) => {
-    const runtime = runtimeByView[viewId]
-    if (runtime) runtime.hasNewIssues = false
-  })
+async function clearAllStashed(): Promise<void> {
+  try {
+    applyStashView(await clearStashedIssues())
+  } catch (error) {
+    if (activeRuntime.value) activeRuntime.value.error = String(error)
+  }
 }
 
 /**
@@ -394,7 +417,7 @@ onBeforeUnmount(() => {
           <span v-if="activeRuntime.updatedAt">更新于 {{ formatUpdatedAt(activeRuntime.updatedAt) }}</span>
         </div>
         <div class="bug-panel__actions">
-          <button class="icon-button" type="button" title="刷新" aria-label="刷新" :disabled="activeRuntime.loading" @click="refreshView(activeView.id)">
+          <button v-if="activeView.kind === 'jira'" class="icon-button" type="button" title="刷新" aria-label="刷新" :disabled="activeRuntime.loading" @click="refreshView(activeView.id)">
             <RefreshCw :size="17" :class="{ spinning: activeRuntime.loading }" />
           </button>
           <button class="icon-button" type="button" title="关闭" aria-label="关闭" @click="toggleView(activeView.id)">
@@ -416,41 +439,14 @@ onBeforeUnmount(() => {
         </div>
 
         <template v-else>
-          <div v-if="stashedIssues.length > 0" class="stashed-section">
-            <h3 class="stashed-header">
-              暂存的问题单
-              <span class="stashed-count">（{{ stashedIssues.length }}）</span>
-            </h3>
-            <div class="stashed-list">
-              <button
-                v-for="issue in stashedIssues"
-                :key="issue.key"
-                class="bug-row stashed-row"
-                :style="getProjectStyle(issue.projectKey)"
-                type="button"
-                @click="handleOpenExternal(issue.link)"
-                @mousedown="handleIssueMouseDown($event, issue.key)"
-                @contextmenu.prevent="unstashIssue(issue.key)"
-              >
-                <span class="bug-row__main">
-                  <strong><span class="issue-key">{{ issue.key }}</span>{{ issue.title }}</strong>
-                  <span class="bug-row__meta">
-                    <span class="project-tag" :title="issue.projectName">{{ issue.projectKey }}</span>
-                    <span v-if="issue.issueType">{{ issue.issueType }}</span>
-                    <span v-if="issue.status">{{ issue.status }}</span>
-                    <span v-if="issue.priority">{{ issue.priority }}</span>
-                  </span>
-                </span>
-                <span class="unstash-btn" @click.stop="unstashIssue(issue.key)">取消暂存</span>
-                <ExternalLink :size="16" />
-              </button>
-            </div>
+          <div v-if="activeView.kind === 'stash' && activeRuntime.issues.length > 0" class="stash-toolbar">
+            <span>本地暂存 {{ activeRuntime.issues.length }} 条</span>
             <button class="text-button" type="button" @click="clearAllStashed">清空暂存</button>
           </div>
 
           <div v-if="activeRuntime.issues.length === 0" class="panel-state panel-state--success">
             <span class="status-dot" />
-            <span>当前没有符合条件的问题单</span>
+            <span>{{ activeView.kind === 'stash' ? '暂存视图为空' : '当前没有符合条件的问题单' }}</span>
           </div>
 
           <button
@@ -461,7 +457,7 @@ onBeforeUnmount(() => {
             type="button"
             @click="handleOpenExternal(issue.link)"
             @mousedown="handleIssueMouseDown($event, issue.key)"
-            @contextmenu.prevent="stashIssue(issue.key)"
+            @contextmenu.prevent
           >
             <span class="bug-row__main">
               <strong><span class="issue-key">{{ issue.key }}</span>{{ issue.title }}</strong>
@@ -472,9 +468,10 @@ onBeforeUnmount(() => {
                 <span v-if="issue.priority">{{ issue.priority }}</span>
               </span>
             </span>
-            <span class="stash-action" title="暂存问题单" role="button" tabindex="0" @click.stop="stashIssue(issue.key)" @keydown.enter.stop="stashIssue(issue.key)">
+            <span v-if="activeView.kind === 'jira'" class="stash-action" title="暂存问题单" role="button" tabindex="0" @click.stop="stashIssue(issue.key)" @keydown.enter.stop="stashIssue(issue.key)">
               <Archive :size="15" />
             </span>
+            <span v-else class="unstash-btn" role="button" tabindex="0" @click.stop="unstashIssue(issue.key)" @keydown.enter.stop="unstashIssue(issue.key)">移出暂存</span>
             <ExternalLink :size="16" />
           </button>
         </template>

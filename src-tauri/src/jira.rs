@@ -4,7 +4,8 @@ use url::Url;
 
 use crate::{
     models::{
-        IssueItem, IssueResponse, JiraConnectionResult, JiraSearchResponse, JiraUserResponse,
+        IssueItem, IssueResponse, IssueViewKind, JiraConnectionResult, JiraSearchResponse,
+        JiraUserResponse,
     },
     storage::{AppState, normalize_base_url, read_jira_token},
 };
@@ -106,7 +107,7 @@ async fn fetch_issues_inner(
         let view = config
             .views
             .iter()
-            .find(|view| view.id == view_id)
+            .find(|view| view.id == view_id && view.kind == IssueViewKind::Jira)
             .cloned()
             .ok_or_else(|| "未找到问题单视图".to_string())?;
         (config.jira.clone(), view)

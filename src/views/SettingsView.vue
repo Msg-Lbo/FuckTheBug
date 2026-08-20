@@ -5,7 +5,7 @@ import { relaunch } from '@tauri-apps/plugin-process'
 import { check as checkForUpdate } from '@tauri-apps/plugin-updater'
 import { CheckCircle2, Download, Eye, EyeOff, KeyRound, Plus, RefreshCw, Save, Trash2, Unplug, X } from '@lucide/vue'
 import { closeSettingsWindow, getConfig, saveConfig, testJiraConnection } from '../api'
-import type { AppConfig, IssueView } from '../types'
+import type { AppConfig } from '../types'
 
 const config = ref<AppConfig>({
   jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
@@ -33,6 +33,7 @@ const updateButtonLabel = computed(() => {
   if (availableVersion.value) return `更新到 v${availableVersion.value}`
   return '检查更新'
 })
+const jiraViewCount = computed(() => config.value.views.filter((view) => view.kind === 'jira').length)
 
 /**
  * 加载设置表单
@@ -138,7 +139,9 @@ function addView(): void {
   config.value.views.push({
     id: crypto.randomUUID(),
     name: '',
+    kind: 'jira',
     jql: 'assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC, updated DESC',
+    issues: [],
   })
 }
 
@@ -180,11 +183,11 @@ function validateForm(): string {
   if (config.value.jira.refreshInterval < 0.1 || config.value.jira.refreshInterval > 1440) {
     return '刷新间隔必须在0.1到1440分钟之间'
   }
-  if (config.value.views.length === 0) return '请至少添加一个问题单视图'
+  if (jiraViewCount.value === 0) return '请至少添加一个问题单视图'
 
   for (const [index, view] of config.value.views.entries()) {
     if (!view.name.trim()) return `问题单视图 #${index + 1} 缺少名称`
-    if (!view.jql.trim()) return `问题单视图 #${index + 1} 缺少JQL`
+    if (view.kind === 'jira' && !view.jql.trim()) return `问题单视图 #${index + 1} 缺少JQL`
   }
 
   return ''
@@ -261,7 +264,7 @@ onMounted(() => void Promise.all([loadConfig(), loadAppVersion()]))
     </header>
 
     <div class="settings-toolbar">
-      <span>{{ config.views.length }} 个问题单视图</span>
+      <span>{{ jiraViewCount }} 个问题单视图</span>
       <button class="command-button command-button--secondary" type="button" @click="addView">
         <Plus :size="17" />
         添加视图
@@ -326,12 +329,13 @@ onMounted(() => void Promise.all([loadConfig(), loadAppVersion()]))
               <span class="feed-editor__index">{{ String(index + 1).padStart(2, '0') }}</span>
               <strong>{{ view.name || '未命名问题单视图' }}</strong>
             </div>
-            <button class="icon-button icon-button--danger" type="button" title="删除" aria-label="删除问题单视图" @click="removeView(index)">
+            <button v-if="view.kind === 'jira'" class="icon-button icon-button--danger" type="button" title="删除" aria-label="删除问题单视图" @click="removeView(index)">
               <Trash2 :size="17" />
             </button>
+            <span v-else class="local-view-badge">本地分类 · {{ view.issues.length }} 条</span>
           </header>
 
-          <div class="form-grid form-grid--view">
+          <div v-if="view.kind === 'jira'" class="form-grid form-grid--view">
             <label class="field">
               <span>名称</span>
               <input v-model.trim="view.name" maxlength="40" type="text" placeholder="例如：我的未解决问题单" />
@@ -342,9 +346,10 @@ onMounted(() => void Promise.all([loadConfig(), loadAppVersion()]))
               <textarea v-model.trim="view.jql" maxlength="2000" rows="3" spellcheck="false" />
             </label>
           </div>
+          <div v-else class="local-view-description">右键问题单或点击归档图标时自动归入此视图。</div>
         </article>
 
-        <div v-if="config.views.length === 0" class="settings-state settings-state--compact">
+        <div v-if="jiraViewCount === 0" class="settings-state settings-state--compact">
           <span>还没有问题单视图</span>
           <button class="text-button" type="button" @click="addView">添加第一个</button>
         </div>

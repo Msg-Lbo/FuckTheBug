@@ -10,8 +10,8 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::models::{
-    CONFIG_VERSION, IssueView, KEYRING_SERVICE, LegacyAppConfig, PublicAppConfig, PublicJiraConfig,
-    StoredAppConfig, TOKEN_ACCOUNT,
+    CONFIG_VERSION, IssueView, IssueViewKind, KEYRING_SERVICE, LegacyAppConfig, PublicAppConfig,
+    PublicJiraConfig, StoredAppConfig, TOKEN_ACCOUNT,
 };
 
 /// 应用共享状态。
@@ -95,11 +95,16 @@ pub fn to_stored_config(
     if !(0.1..=1440.0).contains(&public.jira.refresh_interval) {
         return Err("刷新间隔必须在0.1到1440分钟之间".to_string());
     }
-    if public.views.is_empty() {
+    if !public
+        .views
+        .iter()
+        .any(|view| view.kind == IssueViewKind::Jira)
+    {
         return Err("请至少保留一个问题单视图".to_string());
     }
 
     let mut ids = std::collections::HashSet::new(); // 视图唯一标识集合
+    let mut stash_count = 0; // 暂存视图数量
     for view in &public.views {
         if view.id.trim().is_empty() || !ids.insert(view.id.clone()) {
             return Err("问题单视图标识无效或重复".to_string());
@@ -107,8 +112,24 @@ pub fn to_stored_config(
         if view.name.trim().is_empty() || view.name.chars().count() > 40 {
             return Err("问题单视图名称必须为1到40个字符".to_string());
         }
-        if view.jql.trim().is_empty() || view.jql.chars().count() > 2000 {
-            return Err("JQL必须为1到2000个字符".to_string());
+        match view.kind {
+            IssueViewKind::Jira => {
+                if view.jql.trim().is_empty() || view.jql.chars().count() > 2000 {
+                    return Err("JQL必须为1到2000个字符".to_string());
+                }
+                if !view.issues.is_empty() {
+                    return Err("JIRA视图不能包含本地暂存问题单".to_string());
+                }
+            }
+            IssueViewKind::Stash => {
+                stash_count += 1;
+                if stash_count > 1 {
+                    return Err("只能保留一个暂存视图".to_string());
+                }
+                if !view.jql.is_empty() {
+                    return Err("暂存视图不能包含JQL".to_string());
+                }
+            }
         }
     }
 
@@ -179,7 +200,11 @@ fn validate_stored_config(config: &StoredAppConfig) -> Result<(), String> {
     if !(0.1..=1440.0).contains(&config.jira.refresh_interval) {
         return Err("配置中的刷新间隔超出范围".to_string());
     }
-    if config.views.is_empty() {
+    if !config
+        .views
+        .iter()
+        .any(|view| view.kind == IssueViewKind::Jira)
+    {
         return Err("配置中没有问题单视图".to_string());
     }
     Ok(())
@@ -217,7 +242,9 @@ fn migrate_legacy_config(app: &AppHandle, config_path: &Path) -> Result<StoredAp
             extract_filter_id(&feed.url).map(|filter_id| IssueView {
                 id: Uuid::new_v4().to_string(),
                 name: feed.name.clone(),
+                kind: IssueViewKind::Jira,
                 jql: format!("filter = {filter_id}"),
+                issues: Vec::new(),
             })
         })
         .collect();

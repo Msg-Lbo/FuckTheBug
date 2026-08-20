@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { AppConfig, IssueResponse, JiraConnectionResult } from './types'
+import type { AppConfig, IssueItem, IssueResponse, IssueView, JiraConnectionResult } from './types'
 
 /**
  * 获取应用配置
@@ -16,6 +16,32 @@ export function getConfig(): Promise<AppConfig> {
  */
 export function saveConfig(config: AppConfig): Promise<AppConfig> {
   return invoke<AppConfig>('save_config', { config })
+}
+
+/**
+ * 将问题单加入自动创建的暂存视图
+ * @param issue - 待暂存问题单
+ * @returns 更新后的暂存视图
+ */
+export function stashIssue(issue: IssueItem): Promise<IssueView> {
+  return invoke<IssueView>('stash_issue', { issue })
+}
+
+/**
+ * 从暂存视图移除问题单
+ * @param issueKey - 问题单 Key
+ * @returns 更新后的暂存视图
+ */
+export function unstashIssue(issueKey: string): Promise<IssueView> {
+  return invoke<IssueView>('unstash_issue', { issueKey })
+}
+
+/**
+ * 清空暂存视图
+ * @returns 更新后的暂存视图
+ */
+export function clearStashedIssues(): Promise<IssueView> {
+  return invoke<IssueView>('clear_stashed_issues')
 }
 
 /**

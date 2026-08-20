@@ -398,6 +398,31 @@ button {
   }
 }
 
+.stash-toolbar {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 6px 6px;
+  color: #8f9aa2;
+  font-size: 11px;
+}
+
+.unstash-btn {
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  color: #d6a3a0;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: #ffbbb6;
+    outline: none;
+  }
+}
+
 .panel-state {
   min-height: 180px;
   display: flex;
@@ -562,6 +587,21 @@ button {
     font-family: "Cascadia Mono", monospace;
     font-size: 11px;
   }
+}
+
+.local-view-badge {
+  padding: 3px 7px;
+  color: #a7c9b4;
+  font-size: 10px;
+  background: #1a2d23;
+  border: 1px solid #37684a;
+  border-radius: 4px;
+}
+
+.local-view-description {
+  padding: 16px;
+  color: #8e999f;
+  font-size: 12px;
 }
 
 .form-grid {

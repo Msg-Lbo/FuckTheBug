@@ -8,12 +8,84 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::{
-    models::PublicAppConfig,
+    models::{IssueItem, IssueView, IssueViewKind, PublicAppConfig},
     storage::{
         AppState, initialize_state, to_public_config, to_stored_config, update_jira_token,
         write_stored_config,
     },
 };
+
+/// 将问题单加入自动创建的暂存视图。
+#[tauri::command]
+fn stash_issue(issue: IssueItem, state: tauri::State<'_, AppState>) -> Result<IssueView, String> {
+    let mut config = state
+        .config
+        .lock()
+        .map_err(|_| "配置锁已损坏".to_string())?;
+    let stash_index = match config
+        .views
+        .iter()
+        .position(|view| view.kind == IssueViewKind::Stash)
+    {
+        Some(index) => index,
+        None => {
+            config.views.push(IssueView {
+                id: uuid::Uuid::new_v4().to_string(),
+                name: "暂存".to_string(),
+                kind: IssueViewKind::Stash,
+                jql: String::new(),
+                issues: Vec::new(),
+            });
+            config.views.len() - 1
+        }
+    };
+    let stash_view = &mut config.views[stash_index]; // 唯一暂存视图
+    if !stash_view.issues.iter().any(|item| item.key == issue.key) {
+        stash_view.issues.insert(0, issue);
+    }
+    let result = stash_view.clone(); // 写入后的暂存视图
+    write_stored_config(&state.config_path, &config)?;
+    Ok(result)
+}
+
+/// 从暂存视图移除指定问题单。
+#[tauri::command]
+fn unstash_issue(
+    issue_key: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<IssueView, String> {
+    let mut config = state
+        .config
+        .lock()
+        .map_err(|_| "配置锁已损坏".to_string())?;
+    let stash_view = config
+        .views
+        .iter_mut()
+        .find(|view| view.kind == IssueViewKind::Stash)
+        .ok_or_else(|| "暂存视图不存在".to_string())?;
+    stash_view.issues.retain(|issue| issue.key != issue_key);
+    let result = stash_view.clone(); // 写入后的暂存视图
+    write_stored_config(&state.config_path, &config)?;
+    Ok(result)
+}
+
+/// 清空暂存视图中的全部问题单。
+#[tauri::command]
+fn clear_stashed_issues(state: tauri::State<'_, AppState>) -> Result<IssueView, String> {
+    let mut config = state
+        .config
+        .lock()
+        .map_err(|_| "配置锁已损坏".to_string())?;
+    let stash_view = config
+        .views
+        .iter_mut()
+        .find(|view| view.kind == IssueViewKind::Stash)
+        .ok_or_else(|| "暂存视图不存在".to_string())?;
+    stash_view.issues.clear();
+    let result = stash_view.clone(); // 写入后的暂存视图
+    write_stored_config(&state.config_path, &config)?;
+    Ok(result)
+}
 
 /// 获取不含Token明文的应用配置。
 #[tauri::command]
@@ -126,6 +198,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
+            stash_issue,
+            unstash_issue,
+            clear_stashed_issues,
             send_system_notification,
             jira::fetch_issues,
             jira::test_jira_connection,

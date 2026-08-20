@@ -52,7 +52,21 @@ pub struct PublicJiraConfig {
 pub struct IssueView {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub kind: IssueViewKind,
+    #[serde(default)]
     pub jql: String,
+    #[serde(default)]
+    pub issues: Vec<IssueItem>,
+}
+
+/// 问题单视图类型。
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IssueViewKind {
+    #[default]
+    Jira,
+    Stash,
 }
 
 /// 主窗口物理坐标。
@@ -124,7 +138,7 @@ pub struct JiraNamedField {
 }
 
 /// 前端问题单数据。
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueItem {
     pub title: String,
@@ -182,9 +196,53 @@ impl Default for StoredAppConfig {
             views: vec![IssueView {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: "我的问题单".to_string(),
+                kind: IssueViewKind::Jira,
                 jql: "assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC, updated DESC".to_string(),
+                issues: Vec::new(),
             }],
             window_position: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_issue_view_defaults_to_jira() {
+        let view: IssueView = serde_json::from_str(
+            r#"{"id":"view-1","name":"我的问题单","jql":"assignee = currentUser()"}"#,
+        )
+        .expect("旧视图配置应可读取");
+
+        assert_eq!(view.kind, IssueViewKind::Jira);
+        assert!(view.issues.is_empty());
+    }
+
+    #[test]
+    fn stash_view_round_trip_preserves_issues() {
+        let view = IssueView {
+            id: "stash-1".to_string(),
+            name: "暂存".to_string(),
+            kind: IssueViewKind::Stash,
+            jql: String::new(),
+            issues: vec![IssueItem {
+                title: "修复登录异常".to_string(),
+                link: "https://jira.example.com/browse/BUG-1".to_string(),
+                key: "BUG-1".to_string(),
+                project_key: "BUG".to_string(),
+                project_name: "缺陷".to_string(),
+                issue_type: "Bug".to_string(),
+                status: "待处理".to_string(),
+                priority: "High".to_string(),
+                updated: "2026-08-20T00:00:00Z".to_string(),
+            }],
+        };
+        let encoded = serde_json::to_string(&view).expect("暂存视图应可序列化");
+        let decoded: IssueView = serde_json::from_str(&encoded).expect("暂存视图应可反序列化");
+
+        assert_eq!(decoded.kind, IssueViewKind::Stash);
+        assert_eq!(decoded.issues[0].key, "BUG-1");
     }
 }
