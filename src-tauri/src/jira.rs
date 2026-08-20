@@ -128,15 +128,16 @@ fn extract_versions(description: &str) -> Vec<String> {
     for line in description.lines() {
         let trimmed = line.trim(); // 当前描述行
         let has_version_label = trimmed.contains("版本"); // 是否包含版本标题
+        let version_context = expect_version || has_version_label; // 当前行是否处于版本上下文
         for token in trimmed.split_whitespace() {
             let candidate = normalize_version_candidate(token); // 清理后的候选版本
-            let has_numeric_version = is_version_number(&candidate); // 是否为版本号
-            let is_version_line = expect_version && is_version_number(&candidate); // 是否为版本标题下一行
-            if has_numeric_version || is_version_line {
+            let explicit_version =
+                token.trim_start().starts_with(['V', 'v']) && is_version_number(&candidate); // 是否为明确的V开头版本号
+            if (version_context || explicit_version) && is_version_number(&candidate) {
                 versions.push(candidate);
             }
         }
-        expect_version = has_version_label;
+        expect_version = has_version_label || (expect_version && trimmed.is_empty());
     }
     versions.sort();
     versions.dedup();
@@ -388,5 +389,6 @@ mod tests {
             extract_versions("版本：1.2.3\n版本：2.0.0"),
             ["1.2.3", "2.0.0"]
         );
+        assert!(extract_versions("2026-08-11-16-05-14-808").is_empty());
     }
 }
