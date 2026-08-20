@@ -71,6 +71,22 @@ const activeVisibleIssues = computed(() => {
 })
 
 /**
+ * 切换版本筛选Tag
+ * @param version - 版本号
+ */
+function toggleVersionFilter(version: string): void {
+  activeVersionFilter.value = activeVersionFilter.value === version ? '' : version
+}
+
+/**
+ * 切换平台筛选Tag
+ * @param platform - 平台名称
+ */
+function togglePlatformFilter(platform: string): void {
+  activePlatformFilter.value = activePlatformFilter.value === platform ? '' : platform
+}
+
+/**
  * 创建问题单视图运行状态
  * @returns 初始运行状态
  */
@@ -521,14 +537,40 @@ onBeforeUnmount(() => {
 
         <template v-else>
           <div v-if="activeView.kind === 'jira' && activeRuntime.issues.length > 0" class="filter-toolbar">
-            <select v-model="activeVersionFilter" aria-label="按版本筛选" title="按版本筛选">
-              <option value="">全部版本</option>
-              <option v-for="version in activeVersionOptions" :key="version" :value="version">{{ version }}</option>
-            </select>
-            <select v-model="activePlatformFilter" aria-label="按平台筛选" title="按平台筛选">
-              <option value="">全部平台</option>
-              <option v-for="platform in activePlatformOptions" :key="platform" :value="platform">{{ platform }}</option>
-            </select>
+            <div class="filter-group" aria-label="按版本筛选">
+              <span class="filter-group__label">版本</span>
+              <button
+                class="filter-tag"
+                :class="{ 'filter-tag--active': !activeVersionFilter }"
+                type="button"
+                @click="activeVersionFilter = ''"
+              >全部</button>
+              <button
+                v-for="version in activeVersionOptions"
+                :key="version"
+                class="filter-tag"
+                :class="{ 'filter-tag--active': activeVersionFilter === version }"
+                type="button"
+                @click="toggleVersionFilter(version)"
+              >{{ version }}</button>
+            </div>
+            <div class="filter-group" aria-label="按平台筛选">
+              <span class="filter-group__label">平台</span>
+              <button
+                class="filter-tag"
+                :class="{ 'filter-tag--active': !activePlatformFilter }"
+                type="button"
+                @click="activePlatformFilter = ''"
+              >全部</button>
+              <button
+                v-for="platform in activePlatformOptions"
+                :key="platform"
+                class="filter-tag"
+                :class="{ 'filter-tag--active': activePlatformFilter === platform }"
+                type="button"
+                @click="togglePlatformFilter(platform)"
+              >{{ platform }}</button>
+            </div>
             <span>{{ activeVisibleIssues.length }} / {{ activeRuntime.issues.length }}</span>
           </div>
 

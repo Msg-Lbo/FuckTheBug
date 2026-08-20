@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// 持久化配置版本。
 pub const CONFIG_VERSION: u8 = 2;
@@ -124,10 +127,17 @@ pub struct JiraIssueFields {
     #[serde(default, rename = "fixVersions")]
     pub fix_versions: Vec<JiraNamedField>,
     #[serde(default)]
-    pub components: Vec<JiraNamedField>,
-    #[serde(default)]
-    pub labels: Vec<String>,
+    pub description: Option<Value>,
     pub updated: Option<String>,
+    #[serde(flatten)]
+    pub custom_fields: HashMap<String, Value>,
+}
+
+/// JIRA字段定义。
+#[derive(Debug, Deserialize)]
+pub struct JiraFieldDefinition {
+    pub id: String,
+    pub name: String,
 }
 
 /// JIRA项目字段。

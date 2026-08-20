@@ -4,8 +4,8 @@ use url::Url;
 
 use crate::{
     models::{
-        IssueItem, IssueResponse, IssueViewKind, JiraConnectionResult, JiraSearchResponse,
-        JiraUserResponse,
+        IssueItem, IssueResponse, IssueViewKind, JiraConnectionResult, JiraFieldDefinition,
+        JiraSearchResponse, JiraUserResponse,
     },
     storage::{AppState, normalize_base_url, read_jira_token},
 };
@@ -30,6 +30,117 @@ fn extract_platforms(source: &str) -> Vec<String> {
         platforms.push("iOS".to_string());
     }
     platforms
+}
+
+/// 将JIRA描述字段转换为可检索文本。
+///
+/// # 参数
+/// * `value` - JIRA字段JSON值
+///
+/// # 返回值
+/// 字段中包含的全部文本
+fn jira_value_to_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(text) => text.clone(),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(jira_value_to_text)
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        serde_json::Value::Object(fields) => fields
+            .values()
+            .map(jira_value_to_text)
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
+/// 读取JIRA选择类自定义字段的显示文本。
+///
+/// # 参数
+/// * `value` - 自定义字段JSON值
+///
+/// # 返回值
+/// 字段显示文本
+fn jira_option_to_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(text) => text.clone(),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(jira_option_to_text)
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join(" "),
+        serde_json::Value::Object(fields) => fields
+            .get("value")
+            .or_else(|| fields.get("name"))
+            .map(jira_option_to_text)
+            .unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
+/// 清理描述中的版本候选文本。
+/// @param token - 描述中的单词
+/// @returns 版本候选值
+fn normalize_version_candidate(token: &str) -> String {
+    let Some((start, _)) = token
+        .char_indices()
+        .find(|(_, character)| character.is_ascii_digit())
+    else {
+        return String::new();
+    };
+    let prefix = &token[..start]; // 数字前缀
+    let numeric: String = token[start..]
+        .chars()
+        .take_while(|character| character.is_ascii_digit() || matches!(character, '.' | '-' | '_'))
+        .collect();
+    if prefix.ends_with('V') || prefix.ends_with('v') {
+        format!("V{numeric}")
+    } else {
+        numeric
+    }
+}
+
+/// 判断文本是否为多段版本号。
+fn is_version_number(value: &str) -> bool {
+    value
+        .trim_start_matches(['V', 'v'])
+        .split(['.', '-', '_'])
+        .filter(|part| !part.is_empty())
+        .count()
+        >= 2
+}
+
+/// 从描述文本中提取版本号。
+///
+/// # 参数
+/// * `description` - JIRA问题描述
+///
+/// # 返回值
+/// 去重后的版本号列表
+fn extract_versions(description: &str) -> Vec<String> {
+    let mut versions = Vec::new(); // 描述中的版本号
+    let mut expect_version = false; // 下一行是否为版本值
+    for line in description.lines() {
+        let trimmed = line.trim(); // 当前描述行
+        let has_version_label = trimmed.contains("版本"); // 是否包含版本标题
+        for token in trimmed.split_whitespace() {
+            let candidate = normalize_version_candidate(token); // 清理后的候选版本
+            let has_numeric_version = is_version_number(&candidate); // 是否为版本号
+            let is_version_line = expect_version && is_version_number(&candidate); // 是否为版本标题下一行
+            if has_numeric_version || is_version_line {
+                versions.push(candidate);
+            }
+        }
+        expect_version = has_version_label;
+    }
+    versions.sort();
+    versions.dedup();
+    versions
 }
 
 /// 查询指定JQL视图的问题单。
@@ -135,11 +246,39 @@ async fn fetch_issues_inner(
         (config.jira.clone(), view)
     };
     let token = read_jira_token()?; // JIRA访问Token
+    let fields_url = format!("{}/rest/api/2/field", jira.base_url); // JIRA字段元数据地址
+    let field_response = state
+        .http_client
+        .get(fields_url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .map_err(|error| format!("无法读取JIRA字段：{error}"))?;
+    if field_response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("JIRA认证失败，请在设置中更新Token".to_string());
+    }
+    let field_definitions: Vec<JiraFieldDefinition> = field_response
+        .error_for_status()
+        .map_err(|error| format!("JIRA字段查询失败：{error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("无法解析JIRA字段：{error}"))?;
+    let platform_field_id = field_definitions
+        .into_iter()
+        .find(|field| field.name.trim() == "操作平台")
+        .map(|field| field.id); // 操作平台自定义字段ID
     let url = format!("{}/rest/api/2/search", jira.base_url); // JIRA搜索接口
     let mut start_at = 0; // 当前分页起始位置
     let mut jira_issues = Vec::new(); // 全部分页问题单
     let total = loop {
         let start_at_text = start_at.to_string(); // 分页起始位置参数
+        let fields = match &platform_field_id {
+            Some(field_id) => format!(
+                "summary,description,project,status,priority,issuetype,fixVersions,updated,{field_id}"
+            ),
+            None => "summary,description,project,status,priority,issuetype,fixVersions,updated"
+                .to_string(),
+        }; // 搜索字段列表
         let response = state
             .http_client
             .get(&url)
@@ -148,10 +287,7 @@ async fn fetch_issues_inner(
                 ("jql", view.jql.as_str()),
                 ("startAt", start_at_text.as_str()),
                 ("maxResults", "100"),
-                (
-                    "fields",
-                    "summary,project,status,priority,issuetype,fixVersions,components,labels,updated",
-                ),
+                ("fields", fields.as_str()),
             ])
             .send()
             .await
@@ -189,11 +325,24 @@ async fn fetch_issues_inner(
                 .fix_versions
                 .iter()
                 .map(|field| field.name.clone())
-                .collect(); // 问题单版本列表
+                .collect::<Vec<_>>(); // 标准版本列表
+            let description = fields
+                .description
+                .as_ref()
+                .map(jira_value_to_text)
+                .unwrap_or_default(); // 问题描述文本
+            let description_versions = extract_versions(&description); // 描述中的版本列表
+            let mut versions = versions; // 合并后的版本列表
+            versions.extend(description_versions);
+            versions.sort();
+            versions.dedup();
+            let custom_platform = platform_field_id
+                .as_ref()
+                .and_then(|field_id| fields.custom_fields.get(field_id))
+                .map(jira_option_to_text)
+                .unwrap_or_default(); // 操作平台字段文本
             let platform_source = std::iter::once(fields.summary.as_str())
-                .chain(fields.fix_versions.iter().map(|field| field.name.as_str()))
-                .chain(fields.components.iter().map(|field| field.name.as_str()))
-                .chain(fields.labels.iter().map(String::as_str))
+                .chain(std::iter::once(custom_platform.as_str()))
                 .collect::<Vec<_>>()
                 .join(" "); // 平台识别文本
             let platforms = extract_platforms(&platform_source); // 归一化平台列表
@@ -223,12 +372,21 @@ async fn fetch_issues_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::extract_platforms;
+    use super::{extract_platforms, extract_versions};
 
     #[test]
     fn extracts_and_normalizes_mobile_platforms() {
         assert_eq!(extract_platforms("Android 15 iOS-App"), ["Android", "iOS"]);
         assert_eq!(extract_platforms("安卓客户端"), ["Android"]);
         assert!(extract_platforms("BIOS 设置").is_empty());
+    }
+
+    #[test]
+    fn extracts_versions_from_description_labels() {
+        assert_eq!(extract_versions("1.版本\n\nV1.61.1"), ["V1.61.1"]);
+        assert_eq!(
+            extract_versions("版本：1.2.3\n版本：2.0.0"),
+            ["1.2.3", "2.0.0"]
+        );
     }
 }
