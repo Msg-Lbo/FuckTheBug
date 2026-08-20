@@ -1,15 +1,15 @@
 {
-  "version": "2.1.9",
+  "version": "2.1.10",
   "notes": "Windows 安装包与签名在线更新文件由 GitHub Actions 自动生成。",
-  "pub_date": "2026-08-20T12:34:13.87Z",
+  "pub_date": "2026-08-20T12:51:32.118Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcDV6MHRMNHllYkhLQWk3bDdCTWs2NDY4OWNyUmQwZlRyL3luRTZxOVphcFBSMWpwSi9QOWdwazhVS0crK1pGWHNlK3hIeTJYR29Xbzd4eGtVNVZFekVTdGFCRHpPMVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjI5MjUxCWZpbGU6RnVja1RoZUJ1Z18yLjEuOV94NjQtc2V0dXAuZXhlCkdXc2NqeXFyZy8wVitSZDVEaTBWSC82N2VETWM2QzRtb2l6TVErS0NBb3N0RGhXV3VZWTU3c0c5N1p3WEt0TXFiVSsvM3lsa0hrVkx1VXFzNWJlUEN3PT0K",
-      "url": "https://github.com/Msg-Lbo/FuckTheBug/releases/download/v2.1.9/FuckTheBug_2.1.9_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcDV6MHRMNHllYktmSy9Vc2dMTmd4bFl6R1ViZVRQWTJ6Nlp2SnZLRWNkODhWVHExcFo2dWJwaEtzcnk2WTdwNmZUNkJzK3JLU2NvNStuUlJETmx5emFEaUM4RXM1MXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjMwMjg4CWZpbGU6RnVja1RoZUJ1Z18yLjEuMTBfeDY0LXNldHVwLmV4ZQpIZnNBeUhkUHV2TFEzeG81NnpLZFEraWVXcFdMeXBDN3g2Q1cxblA4VFZkZW11elJFK3dpMytpOXg4KzZQOGd4dW1YV3o5dWZReGNhKzlQUXdlczRDQT09Cg==",
+      "url": "https://github.com/Msg-Lbo/FuckTheBug/releases/download/v2.1.10/FuckTheBug_2.1.10_x64-setup.exe"
     },
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcDV6MHRMNHllYkhLQWk3bDdCTWs2NDY4OWNyUmQwZlRyL3luRTZxOVphcFBSMWpwSi9QOWdwazhVS0crK1pGWHNlK3hIeTJYR29Xbzd4eGtVNVZFekVTdGFCRHpPMVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjI5MjUxCWZpbGU6RnVja1RoZUJ1Z18yLjEuOV94NjQtc2V0dXAuZXhlCkdXc2NqeXFyZy8wVitSZDVEaTBWSC82N2VETWM2QzRtb2l6TVErS0NBb3N0RGhXV3VZWTU3c0c5N1p3WEt0TXFiVSsvM3lsa0hrVkx1VXFzNWJlUEN3PT0K",
-      "url": "https://github.com/Msg-Lbo/FuckTheBug/releases/download/v2.1.9/FuckTheBug_2.1.9_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcDV6MHRMNHllYktmSy9Vc2dMTmd4bFl6R1ViZVRQWTJ6Nlp2SnZLRWNkODhWVHExcFo2dWJwaEtzcnk2WTdwNmZUNkJzK3JLU2NvNStuUlJETmx5emFEaUM4RXM1MXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjMwMjg4CWZpbGU6RnVja1RoZUJ1Z18yLjEuMTBfeDY0LXNldHVwLmV4ZQpIZnNBeUhkUHV2TFEzeG81NnpLZFEraWVXcFdMeXBDN3g2Q1cxblA4VFZkZW11elJFK3dpMytpOXg4KzZQOGd4dW1YV3o5dWZReGNhKzlQUXdlczRDQT09Cg==",
+      "url": "https://github.com/Msg-Lbo/FuckTheBug/releases/download/v2.1.10/FuckTheBug_2.1.10_x64-setup.exe"
     }
   }
 }
