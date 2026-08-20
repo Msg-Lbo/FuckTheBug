@@ -274,11 +274,10 @@ async fn fetch_issues_inner(
     let total = loop {
         let start_at_text = start_at.to_string(); // 分页起始位置参数
         let fields = match &platform_field_id {
-            Some(field_id) => format!(
-                "summary,description,project,status,priority,issuetype,fixVersions,updated,{field_id}"
-            ),
-            None => "summary,description,project,status,priority,issuetype,fixVersions,updated"
-                .to_string(),
+            Some(field_id) => {
+                format!("summary,description,project,status,priority,issuetype,updated,{field_id}")
+            }
+            None => "summary,description,project,status,priority,issuetype,updated".to_string(),
         }; // 搜索字段列表
         let response = state
             .http_client
@@ -322,21 +321,12 @@ async fn fetch_issues_inner(
         .into_iter()
         .map(|issue| {
             let fields = issue.fields; // 当前问题单字段
-            let versions = fields
-                .fix_versions
-                .iter()
-                .map(|field| field.name.clone())
-                .collect::<Vec<_>>(); // 标准版本列表
             let description = fields
                 .description
                 .as_ref()
                 .map(jira_value_to_text)
                 .unwrap_or_default(); // 问题描述文本
-            let description_versions = extract_versions(&description); // 描述中的版本列表
-            let mut versions = versions; // 合并后的版本列表
-            versions.extend(description_versions);
-            versions.sort();
-            versions.dedup();
+            let versions = extract_versions(&description); // 描述中的版本列表
             let custom_platform = platform_field_id
                 .as_ref()
                 .and_then(|field_id| fields.custom_fields.get(field_id))

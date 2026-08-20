@@ -124,8 +124,6 @@ pub struct JiraIssueFields {
     pub status: Option<JiraNamedField>,
     pub priority: Option<JiraNamedField>,
     pub issuetype: Option<JiraNamedField>,
-    #[serde(default, rename = "fixVersions")]
-    pub fix_versions: Vec<JiraNamedField>,
     #[serde(default)]
     pub description: Option<Value>,
     pub updated: Option<String>,
