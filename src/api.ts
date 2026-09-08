@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { AppConfig, IssueItem, IssueResponse, IssueView, JiraConnectionResult } from './types'
+import type { AppConfig, IssueDetail, IssueItem, IssueResponse, IssueView, JiraConnectionResult } from './types'
 
 /**
  * 获取应用配置
@@ -64,6 +64,15 @@ export function fetchIssues(viewId: string): Promise<IssueResponse> {
 }
 
 /**
+ * 获取指定问题单的详情、描述和图片
+ * @param issueKey - 问题单 Key
+ * @returns 问题单详情
+ */
+export function fetchIssueDetail(issueKey: string): Promise<IssueDetail> {
+  return invoke<IssueDetail>('fetch_issue_detail', { issueKey })
+}
+
+/**
  * 测试JIRA地址和Token
  * @param baseUrl - JIRA根地址
  * @param token - 新Token，空字符串表示使用已保存Token
@@ -116,4 +125,27 @@ export function openSettingsWindow(): Promise<void> {
  */
 export function closeSettingsWindow(): Promise<void> {
   return invoke('close_settings_window')
+}
+
+/**
+ * 打开AI提示词窗口
+ * @param issueKey - 问题单 Key
+ */
+export function openAiChatWindow(issueKey: string): Promise<void> {
+  return invoke('open_ai_chat_window', { issueKey })
+}
+
+/**
+ * 隐藏AI提示词窗口
+ */
+export function closeAiChatWindow(): Promise<void> {
+  return invoke('close_ai_chat_window')
+}
+
+/**
+ * 读取待生成提示词的问题单标识
+ * @returns 问题单 Key
+ */
+export function getPendingAiIssue(): Promise<string | null> {
+  return invoke<string | null>('get_pending_ai_issue')
 }

@@ -19,6 +19,7 @@ pub struct AppState {
     pub config_path: PathBuf,
     pub config: Mutex<StoredAppConfig>,
     pub in_flight_views: Mutex<std::collections::HashSet<String>>,
+    pub pending_ai_issue: Mutex<Option<String>>,
     pub http_client: reqwest::Client,
 }
 
@@ -47,6 +48,7 @@ pub fn initialize_state(app: &AppHandle) -> Result<AppState, String> {
         config_path,
         config: Mutex::new(config),
         in_flight_views: Mutex::new(std::collections::HashSet::new()),
+        pending_ai_issue: Mutex::new(None),
         http_client,
     })
 }

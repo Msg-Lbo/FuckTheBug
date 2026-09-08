@@ -127,8 +127,39 @@ pub struct JiraIssueFields {
     #[serde(default)]
     pub description: Option<Value>,
     pub updated: Option<String>,
+    #[serde(default)]
+    pub attachment: Vec<JiraAttachment>,
+    #[serde(default)]
+    pub environment: Option<Value>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub components: Vec<JiraNamedField>,
+    pub reporter: Option<JiraUserField>,
     #[serde(flatten)]
     pub custom_fields: HashMap<String, Value>,
+}
+
+/// JIRA附件。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JiraAttachment {
+    pub id: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub content: String,
+    #[serde(default)]
+    pub size: u64,
+}
+
+/// JIRA用户字段。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JiraUserField {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub display_name: String,
 }
 
 /// JIRA字段定义。
@@ -168,6 +199,39 @@ pub struct IssueItem {
     #[serde(default)]
     pub platforms: Vec<String>,
     pub updated: String,
+}
+
+/// 问题单中的图片。
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueImage {
+    pub filename: String,
+    pub mime_type: String,
+    pub data_url: String,
+}
+
+/// 问题单完整详情，供AI提示词使用。
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueDetail {
+    pub title: String,
+    pub link: String,
+    pub key: String,
+    pub project_key: String,
+    pub project_name: String,
+    pub issue_type: String,
+    pub status: String,
+    pub priority: String,
+    pub versions: Vec<String>,
+    pub platforms: Vec<String>,
+    pub updated: String,
+    pub description: String,
+    pub environment: String,
+    pub labels: Vec<String>,
+    pub components: Vec<String>,
+    pub reporter: String,
+    pub images: Vec<IssueImage>,
+    pub failed_images: Vec<String>,
 }
 
 /// 前端问题单搜索结果。

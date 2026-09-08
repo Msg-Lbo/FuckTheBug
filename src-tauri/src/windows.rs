@@ -1,4 +1,4 @@
-use tauri::{LogicalSize, Manager, PhysicalPosition, Position, Size, State};
+use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, Position, Size, State};
 
 use crate::{
     models::WindowPosition,
@@ -105,6 +105,60 @@ pub fn close_settings_window(app: tauri::AppHandle) -> Result<(), String> {
         .ok_or_else(|| "设置窗口不存在".to_string())?
         .hide()
         .map_err(|error| format!("无法隐藏设置窗口：{error}"))
+}
+
+/// 显示AI提示词窗口并传入问题单标识。
+#[tauri::command]
+pub fn open_ai_chat_window(
+    app: tauri::AppHandle,
+    issue_key: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let valid = issue_key.len() <= 32
+        && issue_key.contains('-')
+        && issue_key
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-');
+    if !valid {
+        return Err("问题单标识格式不正确".to_string());
+    }
+    *state
+        .pending_ai_issue
+        .lock()
+        .map_err(|_| "请求状态锁已损坏".to_string())? = Some(issue_key.clone());
+    let window = app
+        .get_webview_window("ai-chat")
+        .ok_or_else(|| "AI窗口不存在".to_string())?;
+    window
+        .show()
+        .map_err(|error| format!("无法显示AI窗口：{error}"))?;
+    window
+        .unminimize()
+        .map_err(|error| format!("无法恢复AI窗口：{error}"))?;
+    window
+        .set_focus()
+        .map_err(|error| format!("无法聚焦AI窗口：{error}"))?;
+    app.emit("ai-issue-open", issue_key)
+        .map_err(|error| format!("无法通知AI窗口：{error}"))
+}
+
+/// 隐藏AI提示词窗口。
+#[tauri::command]
+pub fn close_ai_chat_window(app: tauri::AppHandle) -> Result<(), String> {
+    app.get_webview_window("ai-chat")
+        .ok_or_else(|| "AI窗口不存在".to_string())?
+        .hide()
+        .map_err(|error| format!("无法隐藏AI窗口：{error}"))
+}
+
+/// 读取待生成提示词的问题单标识。
+#[tauri::command]
+pub fn get_pending_ai_issue(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    Ok(state
+        .pending_ai_issue
+        .lock()
+        .map_err(|_| "请求状态锁已损坏".to_string())?
+        .clone())
 }
 
 /// 恢复已保存的主窗口位置。

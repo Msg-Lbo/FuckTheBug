@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口和设置窗口允许监听配置事件并执行签名更新",
-  "windows": ["main", "settings"],
+  "description": "主窗口、设置窗口和AI窗口允许监听配置事件并执行签名更新",
+  "windows": ["main", "settings", "ai-chat"],
   "permissions": [
     "core:default",
     "core:event:allow-listen",

@@ -203,6 +203,7 @@ pub fn run() {
             clear_stashed_issues,
             send_system_notification,
             jira::fetch_issues,
+            jira::fetch_issue_detail,
             jira::test_jira_connection,
             jira::open_external,
             windows::resize_main_window,
@@ -210,6 +211,9 @@ pub fn run() {
             windows::save_main_window_position,
             windows::open_settings_window,
             windows::close_settings_window,
+            windows::open_ai_chat_window,
+            windows::close_ai_chat_window,
+            windows::get_pending_ai_issue,
         ])
         .build(tauri::generate_context!())
         .expect("Tauri应用构建失败");

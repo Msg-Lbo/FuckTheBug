@@ -54,3 +54,30 @@ export interface JiraConnectionResult {
   displayName: string
   username: string
 }
+
+export interface IssueImage {
+  filename: string
+  mimeType: string
+  dataUrl: string
+}
+
+export interface IssueDetail {
+  title: string
+  link: string
+  key: string
+  projectKey: string
+  projectName: string
+  issueType: string
+  status: string
+  priority: string
+  versions: string[]
+  platforms: string[]
+  updated: string
+  description: string
+  environment: string
+  labels: string[]
+  components: string[]
+  reporter: string
+  images: IssueImage[]
+  failedImages: string[]
+}

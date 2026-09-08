@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type CSSProperties } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { Archive, AlertCircle, ExternalLink, RefreshCw, Settings, X } from '@lucide/vue'
+import { Archive, AlertCircle, RefreshCw, Settings, Sparkles, X } from '@lucide/vue'
 import {
   clearStashedIssues,
   fetchIssues,
   getConfig,
+  openAiChatWindow,
   openExternal,
   openSettingsWindow,
   resizeMainWindow,
@@ -369,6 +370,18 @@ async function handleOpenExternal(url: string): Promise<void> {
 }
 
 /**
+ * 打开AI提示词窗口
+ * @param issueKey - 问题单 Key
+ */
+async function handleOpenAi(issueKey: string): Promise<void> {
+  try {
+    await openAiChatWindow(issueKey)
+  } catch (error) {
+    if (activeRuntime.value) activeRuntime.value.error = String(error)
+  }
+}
+
+/**
  * 将问题单加入持久化暂存视图
  * @param issueKey - 问题单 Key
  */
@@ -609,7 +622,9 @@ onBeforeUnmount(() => {
               <Archive :size="15" />
             </span>
             <span v-else class="unstash-btn" role="button" tabindex="0" @click.stop="unstashIssue(issue.key)" @keydown.enter.stop="unstashIssue(issue.key)">移出暂存</span>
-            <ExternalLink :size="16" />
+            <span class="ai-action" title="生成AI提示词" role="button" tabindex="0" @click.stop="handleOpenAi(issue.key)" @keydown.enter.stop="handleOpenAi(issue.key)">
+              <Sparkles :size="15" />
+            </span>
           </button>
         </template>
       </div>
