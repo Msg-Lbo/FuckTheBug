@@ -10,9 +10,9 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::models::{
-    AI_TOKEN_ACCOUNT, CONFIG_VERSION, IssueView, IssueViewKind, KEYRING_SERVICE, LegacyAppConfig,
-    PublicAiConfig, PublicAppConfig, PublicJiraConfig, StoredAiConfig, StoredAppConfig,
-    TOKEN_ACCOUNT,
+    AI_OUTPUT_FORMAT, AI_SKILL_MAX_CHARS, AI_TOKEN_ACCOUNT, CONFIG_VERSION, DEFAULT_AI_SKILL,
+    IssueView, IssueViewKind, KEYRING_SERVICE, LegacyAppConfig, PublicAiConfig, PublicAppConfig,
+    PublicJiraConfig, StoredAiConfig, StoredAppConfig, TOKEN_ACCOUNT,
 };
 
 /// 应用共享状态。
@@ -100,6 +100,9 @@ pub fn to_public_config(config: &StoredAppConfig) -> Result<PublicAppConfig, Str
             token: String::new(),
             has_token: has_ai_token()?,
             clear_token: false,
+            skill: resolve_stored_skill(&config.ai.skill),
+            default_skill: DEFAULT_AI_SKILL.to_string(),
+            output_format: AI_OUTPUT_FORMAT.to_string(),
         },
         views: config.views.clone(),
     })
@@ -163,6 +166,13 @@ pub fn to_stored_config(
     if !public.ai.has_token && public.ai.token.is_empty() && !public.ai.clear_token {
         return Err("请输入AI Token".to_string());
     }
+    let skill = public.ai.skill.trim();
+    if skill.is_empty() {
+        return Err("请输入AI Skill".to_string());
+    }
+    if skill.chars().count() > AI_SKILL_MAX_CHARS {
+        return Err(format!("AI Skill不能超过{AI_SKILL_MAX_CHARS}个字符"));
+    }
 
     Ok(StoredAppConfig {
         version: CONFIG_VERSION,
@@ -173,6 +183,7 @@ pub fn to_stored_config(
         ai: StoredAiConfig {
             base_url: ai_base_url,
             model: public.ai.model.trim().to_string(),
+            skill: skill.to_string(),
         },
         views: public.views.clone(),
         window_position: current.window_position.clone(),
@@ -266,6 +277,16 @@ fn normalize_http_url(value: &str, label: &str) -> Result<String, String> {
     url.set_query(None);
     url.set_fragment(None);
     Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+/// 读取已保存Skill，空值使用内置Skill。
+fn resolve_stored_skill(skill: &str) -> String {
+    let trimmed = skill.trim();
+    if trimmed.is_empty() {
+        DEFAULT_AI_SKILL.to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 /// 校验持久化配置。

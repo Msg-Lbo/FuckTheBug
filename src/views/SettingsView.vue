@@ -9,7 +9,7 @@ import type { AppConfig } from '../types'
 
 const config = ref<AppConfig>({
   jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
-  ai: { baseUrl: '', model: '', token: '', hasToken: false, clearToken: false },
+  ai: { baseUrl: '', model: '', token: '', hasToken: false, clearToken: false, skill: '', defaultSkill: '', outputFormat: '' },
   views: [],
 }) // 表单配置
 const loading = ref(true) // 加载状态
@@ -208,6 +208,8 @@ function validateForm(): string {
   if (!config.value.ai.hasToken && !config.value.ai.token && !config.value.ai.clearToken) {
     return '请输入AI Token'
   }
+  if (!config.value.ai.skill.trim()) return '请输入AI Skill'
+  if (config.value.ai.skill.trim().length > 4000) return 'AI Skill不能超过4000个字符'
 
   for (const [index, view] of config.value.views.entries()) {
     if (!view.name.trim()) return `问题单视图 #${index + 1} 缺少名称`
@@ -275,6 +277,14 @@ async function handleTestAiConnection(): Promise<void> {
   } finally {
     testingAi.value = false
   }
+}
+
+/**
+ * 将AI Skill恢复为内置版本
+ */
+function restoreDefaultSkill(): void {
+  config.value.ai.skill = config.value.ai.defaultSkill
+  message.value = '已恢复内置Skill，保存后生效'
 }
 
 /**
@@ -423,6 +433,18 @@ onMounted(() => void Promise.all([loadConfig(), loadAppVersion()]))
             <span>模型</span>
             <input v-model.trim="config.ai.model" maxlength="100" type="text" placeholder="gpt-4o" />
           </label>
+
+          <label class="field field--wide">
+            <span class="field-label-row">
+              <span>Skill</span>
+              <button class="text-button" type="button" @click="restoreDefaultSkill">恢复内置</button>
+            </span>
+            <textarea v-model="config.ai.skill" maxlength="4000" rows="8" spellcheck="false" />
+          </label>
+        </div>
+        <div class="skill-format">
+          <strong>输出格式（固定）</strong>
+          <pre>{{ config.ai.outputFormat }}</pre>
         </div>
       </div>
 

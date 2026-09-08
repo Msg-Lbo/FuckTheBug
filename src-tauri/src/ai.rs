@@ -4,12 +4,9 @@ use tauri::{Emitter, State};
 
 use crate::{
     jira::load_issue_detail,
-    models::IssueDetail,
+    models::{AI_OUTPUT_FORMAT, DEFAULT_AI_SKILL, IssueDetail},
     storage::{AppState, normalize_ai_url, read_ai_token},
 };
-
-const SYSTEM_PROMPT: &str = "你是资深客户端缺陷分析助手。根据用户提供的 JIRA 问题单正文和截图，生成一段可直接交给编程 AI 用于改代码的提示词。\
-要求：使用中文；包含问题细节、复现方式、期望与实际结果、平台和版本；结合截图中的界面、文案和操作路径；不要编造问题单中没有的步骤；给出修改要求和验证方式；只输出提示词正文，不要寒暄。";
 
 /// 流式生成的起始事件。
 #[derive(Clone, Serialize)]
@@ -109,18 +106,23 @@ pub async fn generate_ai_prompt(
     app.emit("ai-prompt-context", &issue)
         .map_err(|error| format!("无法发送问题单详情：{error}"))?;
 
-    let (base_url, model) = {
+    let (base_url, model, skill) = {
         let config = state
             .config
             .lock()
             .map_err(|_| "配置锁已损坏".to_string())?;
-        (config.ai.base_url.clone(), config.ai.model.clone())
+        (
+            config.ai.base_url.clone(),
+            config.ai.model.clone(),
+            config.ai.skill.clone(),
+        )
     };
     if base_url.is_empty() || model.is_empty() {
         return Err("尚未配置AI接口地址或模型".to_string());
     }
     let token = read_ai_token()?;
     let user_content = build_user_content(&issue);
+    let system_prompt = build_system_prompt(&skill);
     let mut response = state
         .ai_http_client
         .post(format!("{base_url}/chat/completions"))
@@ -129,7 +131,7 @@ pub async fn generate_ai_prompt(
             "model": model,
             "stream": true,
             "messages": [
-                { "role": "system", "content": SYSTEM_PROMPT },
+                { "role": "system", "content": system_prompt },
                 { "role": "user", "content": user_content }
             ]
         }))
@@ -206,6 +208,17 @@ fn is_current_stream(state: &State<'_, AppState>, stream_id: u64) -> Result<bool
         .lock()
         .map_err(|_| "请求状态锁已损坏".to_string())?;
     Ok(*current == stream_id)
+}
+
+/// 将可编辑Skill与固定输出格式拼成系统提示。
+fn build_system_prompt(skill: &str) -> String {
+    let trimmed = skill.trim();
+    let skill = if trimmed.is_empty() {
+        DEFAULT_AI_SKILL
+    } else {
+        trimmed
+    };
+    format!("{skill}\n\n{AI_OUTPUT_FORMAT}")
 }
 
 /// 组装发给模型的问题单文本和截图。
@@ -330,5 +343,14 @@ mod tests {
         assert!(parse_sse_line("data: [DONE]").unwrap().is_none());
         assert!(parse_sse_line(": keep-alive").unwrap().is_none());
         assert!(parse_sse_line("").unwrap().is_none());
+    }
+
+    #[test]
+    fn system_prompt_appends_fixed_output_format() {
+        let prompt = super::build_system_prompt("只分析截图");
+        assert!(prompt.starts_with("只分析截图"));
+        assert!(prompt.contains("## 复现步骤"));
+        assert!(prompt.contains("## 修改要求"));
+        assert!(prompt.contains("## 验证方式"));
     }
 }

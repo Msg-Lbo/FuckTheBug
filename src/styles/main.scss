@@ -786,6 +786,31 @@ button {
   }
 }
 
+.skill-format {
+  margin: 0 16px 16px;
+  padding: 12px;
+  background: #13171a;
+  border: 1px solid #343c42;
+  border-radius: 5px;
+
+  strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #9ca6ad;
+    font-size: 11px;
+  }
+
+  pre {
+    margin: 0;
+    color: #c5cdd3;
+    font-family: "Cascadia Mono", "Microsoft YaHei", monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    user-select: text;
+  }
+}
+
 .connection-status {
   color: #d09a59;
   font-size: 11px;
@@ -881,6 +906,13 @@ button {
 
   &--wide {
     grid-column: 1 / -1;
+  }
+
+  .field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
 
   > input,

@@ -15,6 +15,40 @@ pub const AI_TOKEN_ACCOUNT: &str = "ai-access-token";
 /// 系统凭据库服务名。
 pub const KEYRING_SERVICE: &str = "com.genata.bug-ticker";
 
+/// 内置AI Skill。
+pub const DEFAULT_AI_SKILL: &str = "你是资深客户端缺陷分析助手。根据用户提供的 JIRA 问题单正文和截图，整理成一段可直接交给编程 AI 落地改代码的提示词。\n\n\
+工作方式：\n\
+- 使用简体中文\n\
+- 只使用问题单和截图里出现的信息\n\
+- 结合截图中的界面结构、文案、控件和操作路径\n\
+- 复现步骤写成可执行的顺序操作，一步一个动作\n\
+- 修改要求写清要改的行为，不要空泛说「修复该问题」\n\
+- 验证方式必须能按复现步骤核对";
+
+/// 固定的提示词输出格式。
+pub const AI_OUTPUT_FORMAT: &str = "只输出提示词正文，不要寒暄，不要用代码围栏包裹全文。必须按下面标题和顺序输出，标题一字不改；某项没有依据就写「问题单未提供」，禁止编造。\n\n\
+## 任务\n\
+## 问题单\n\
+- Key：\n\
+- 标题：\n\
+- 链接：\n\
+- 项目：\n\
+- 类型：\n\
+- 状态：\n\
+- 优先级：\n\
+- 版本：\n\
+- 平台：\n\
+## 问题细节\n\
+## 复现步骤\n\
+## 期望结果\n\
+## 实际结果\n\
+## 截图要点\n\
+## 修改要求\n\
+## 验证方式";
+
+/// AI Skill最大字符数。
+pub const AI_SKILL_MAX_CHARS: usize = 4000;
+
 /// 应用持久化配置。
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +77,8 @@ pub struct StoredAiConfig {
     pub base_url: String,
     #[serde(default)]
     pub model: String,
+    #[serde(default)]
+    pub skill: String,
 }
 
 /// 可公开给前端的应用配置。
@@ -74,6 +110,9 @@ pub struct PublicAiConfig {
     pub token: String,
     pub has_token: bool,
     pub clear_token: bool,
+    pub skill: String,
+    pub default_skill: String,
+    pub output_format: String,
 }
 
 /// 一个可计数和展示的问题单视图。
@@ -380,5 +419,6 @@ mod tests {
 
         assert!(config.ai.base_url.is_empty());
         assert!(config.ai.model.is_empty());
+        assert!(config.ai.skill.is_empty());
     }
 }

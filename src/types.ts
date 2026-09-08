@@ -12,6 +12,9 @@ export interface AiConfig {
   token: string
   hasToken: boolean
   clearToken: boolean
+  skill: string
+  defaultSkill: string
+  outputFormat: string
 }
 
 export interface IssueView {
