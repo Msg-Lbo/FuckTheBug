@@ -3,18 +3,21 @@ import { computed, onMounted, ref } from 'vue'
 import { getVersion } from '@tauri-apps/api/app'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { check as checkForUpdate } from '@tauri-apps/plugin-updater'
-import { CheckCircle2, Download, Eye, EyeOff, KeyRound, Plus, RefreshCw, Save, Trash2, Unplug, X } from '@lucide/vue'
-import { closeSettingsWindow, getConfig, saveConfig, testJiraConnection } from '../api'
+import { CheckCircle2, Download, Eye, EyeOff, KeyRound, Plus, RefreshCw, Save, Sparkles, Trash2, Unplug, X } from '@lucide/vue'
+import { closeSettingsWindow, getConfig, saveConfig, testAiConnection, testJiraConnection } from '../api'
 import type { AppConfig } from '../types'
 
 const config = ref<AppConfig>({
   jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
+  ai: { baseUrl: '', model: '', token: '', hasToken: false, clearToken: false },
   views: [],
 }) // 表单配置
 const loading = ref(true) // 加载状态
 const saving = ref(false) // 保存状态
-const testing = ref(false) // 连接测试状态
-const tokenVisible = ref(false) // Token可见状态
+const testing = ref(false) // JIRA连接测试状态
+const testingAi = ref(false) // AI连接测试状态
+const tokenVisible = ref(false) // JIRA Token可见状态
+const aiTokenVisible = ref(false) // AI Token可见状态
 const message = ref('') // 操作提示
 const errorMessage = ref('') // 错误提示
 const appVersion = ref('') // 当前应用版本
@@ -166,6 +169,16 @@ function clearToken(): void {
 }
 
 /**
+ * 标记清除已保存AI Token
+ */
+function clearAiToken(): void {
+  config.value.ai.token = ''
+  config.value.ai.hasToken = false
+  config.value.ai.clearToken = true
+  message.value = '保存后将清除系统凭据中的AI Token'
+}
+
+/**
  * 校验设置表单
  * @returns 错误信息，空字符串表示通过
  */
@@ -184,6 +197,17 @@ function validateForm(): string {
     return '刷新间隔必须在0.1到1440分钟之间'
   }
   if (jiraViewCount.value === 0) return '请至少添加一个问题单视图'
+
+  try {
+    const url = new URL(config.value.ai.baseUrl)
+    if (!['http:', 'https:'].includes(url.protocol)) return 'AI接口地址仅支持HTTP或HTTPS'
+  } catch {
+    return 'AI接口地址格式不正确'
+  }
+  if (!config.value.ai.model.trim()) return '请输入AI模型名称'
+  if (!config.value.ai.hasToken && !config.value.ai.token && !config.value.ai.clearToken) {
+    return '请输入AI Token'
+  }
 
   for (const [index, view] of config.value.views.entries()) {
     if (!view.name.trim()) return `问题单视图 #${index + 1} 缺少名称`
@@ -218,6 +242,38 @@ async function handleTestConnection(): Promise<void> {
     errorMessage.value = String(error)
   } finally {
     testing.value = false
+  }
+}
+
+/**
+ * 测试AI接口连接
+ */
+async function handleTestAiConnection(): Promise<void> {
+  if (!config.value.ai.baseUrl.trim()) {
+    errorMessage.value = '请输入AI接口地址'
+    return
+  }
+  if (!config.value.ai.model.trim()) {
+    errorMessage.value = '请输入AI模型名称'
+    return
+  }
+  if (!config.value.ai.hasToken && !config.value.ai.token) {
+    errorMessage.value = '请输入AI Token'
+    return
+  }
+
+  testingAi.value = true
+  message.value = ''
+  errorMessage.value = ''
+  updateMessage.value = ''
+  updateError.value = ''
+  try {
+    const result = await testAiConnection(config.value.ai.baseUrl, config.value.ai.token, config.value.ai.model)
+    message.value = `AI连接成功：${result}`
+  } catch (error) {
+    errorMessage.value = String(error)
+  } finally {
+    testingAi.value = false
   }
 }
 
@@ -318,6 +374,54 @@ onMounted(() => void Promise.all([loadConfig(), loadAppVersion()]))
           <label class="field">
             <span>刷新间隔（分钟）</span>
             <input v-model.number="config.jira.refreshInterval" min="0.1" max="1440" step="0.1" type="number" />
+          </label>
+        </div>
+      </div>
+
+      <div class="connection-panel">
+        <header class="connection-panel__header">
+          <div>
+            <strong>AI连接</strong>
+            <span :class="{ 'connection-status--ready': config.ai.hasToken }" class="connection-status">
+              {{ config.ai.hasToken ? 'Token已安全保存' : 'Token未保存' }}
+            </span>
+          </div>
+          <button class="command-button command-button--secondary" type="button" :disabled="testingAi" @click="handleTestAiConnection">
+            <Sparkles :size="16" />
+            {{ testingAi ? '正在测试' : '测试连接' }}
+          </button>
+        </header>
+
+        <div class="form-grid form-grid--connection">
+          <label class="field field--wide">
+            <span>接口地址（OpenAI兼容，需含 /v1）</span>
+            <input v-model.trim="config.ai.baseUrl" type="url" placeholder="https://api.openai.com/v1" />
+          </label>
+
+          <label class="field">
+            <span>访问Token</span>
+            <span class="password-input">
+              <input
+                v-model="config.ai.token"
+                :type="aiTokenVisible ? 'text' : 'password'"
+                :placeholder="config.ai.hasToken ? '已安全保存，留空保持不变' : '输入API Key'"
+                autocomplete="new-password"
+                @input="config.ai.clearToken = false"
+              />
+              <button type="button" :title="aiTokenVisible ? '隐藏Token' : '显示Token'" :aria-label="aiTokenVisible ? '隐藏Token' : '显示Token'" @click="aiTokenVisible = !aiTokenVisible">
+                <EyeOff v-if="aiTokenVisible" :size="16" />
+                <Eye v-else :size="16" />
+              </button>
+            </span>
+            <button v-if="config.ai.hasToken" class="clear-secret" type="button" @click="clearAiToken">
+              <KeyRound :size="14" />
+              清除已保存Token
+            </button>
+          </label>
+
+          <label class="field">
+            <span>模型</span>
+            <input v-model.trim="config.ai.model" maxlength="100" type="text" placeholder="gpt-4o" />
           </label>
         </div>
       </div>

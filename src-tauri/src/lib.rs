@@ -1,3 +1,4 @@
+mod ai;
 mod jira;
 mod models;
 mod storage;
@@ -10,8 +11,8 @@ use tauri_plugin_notification::NotificationExt;
 use crate::{
     models::{IssueItem, IssueView, IssueViewKind, PublicAppConfig},
     storage::{
-        AppState, initialize_state, to_public_config, to_stored_config, update_jira_token,
-        write_stored_config,
+        AppState, initialize_state, to_public_config, to_stored_config, update_ai_token,
+        update_jira_token, write_stored_config,
     },
 };
 
@@ -110,6 +111,7 @@ fn save_config(
         .map_err(|_| "配置锁已损坏".to_string())?;
     let stored = to_stored_config(&config, &current)?; // 新持久化配置
     update_jira_token(&config.jira)?;
+    update_ai_token(&config.ai)?;
     write_stored_config(&state.config_path, &stored)?;
     *current = stored;
     let public = to_public_config(&current)?; // 保存后的公开配置
@@ -206,6 +208,8 @@ pub fn run() {
             jira::fetch_issue_detail,
             jira::test_jira_connection,
             jira::open_external,
+            ai::test_ai_connection,
+            ai::generate_ai_prompt,
             windows::resize_main_window,
             windows::start_main_dragging,
             windows::save_main_window_position,

@@ -552,7 +552,15 @@ pub async fn fetch_issue_detail(
     issue_key: String,
     state: State<'_, AppState>,
 ) -> Result<IssueDetail, String> {
-    validate_issue_key(&issue_key)?;
+    load_issue_detail(&issue_key, &state).await
+}
+
+/// 读取问题单详情、描述和图片。
+pub async fn load_issue_detail(
+    issue_key: &str,
+    state: &State<'_, AppState>,
+) -> Result<IssueDetail, String> {
+    validate_issue_key(issue_key)?;
     let base_url = {
         let config = state
             .config

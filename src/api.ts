@@ -83,6 +83,26 @@ export function testJiraConnection(baseUrl: string, token: string): Promise<Jira
 }
 
 /**
+ * 测试AI接口地址、Token和模型
+ * @param baseUrl - OpenAI兼容接口根地址
+ * @param token - 新Token，空字符串表示使用已保存Token
+ * @param model - 模型名称
+ * @returns 模型测试结果
+ */
+export function testAiConnection(baseUrl: string, token: string, model: string): Promise<string> {
+  return invoke<string>('test_ai_connection', { baseUrl, token, model })
+}
+
+/**
+ * 读取问题单并流式生成改代码提示词
+ * @param issueKey - 问题单 Key
+ * @returns 完整提示词
+ */
+export function generateAiPrompt(issueKey: string): Promise<string> {
+  return invoke<string>('generate_ai_prompt', { issueKey })
+}
+
+/**
  * 打开经过协议校验的问题单链接
  * @param url - 问题单链接
  */

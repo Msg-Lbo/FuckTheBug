@@ -20,6 +20,7 @@ import type { AppConfig, IssueView, ViewRuntime } from '../types'
 
 const config = ref<AppConfig>({
   jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
+  ai: { baseUrl: '', model: '', token: '', hasToken: false, clearToken: false },
   views: [],
 }) // 应用配置
 const activeViewId = ref<string | null>(null) // 当前展开视图

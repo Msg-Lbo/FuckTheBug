@@ -700,6 +700,17 @@ button {
   word-break: break-word;
   border-radius: 8px;
   user-select: text;
+
+  &--streaming::after {
+    display: inline-block;
+    width: 7px;
+    height: 13px;
+    margin-left: 3px;
+    content: "";
+    background: #9db7e8;
+    vertical-align: -1px;
+    animation: prompt-caret 800ms step-end infinite;
+  }
 }
 
 .settings-header {
@@ -1068,6 +1079,12 @@ button {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes prompt-caret {
+  50% {
+    opacity: 0;
   }
 }
 

@@ -6,6 +6,14 @@ export interface JiraConfig {
   clearToken: boolean
 }
 
+export interface AiConfig {
+  baseUrl: string
+  model: string
+  token: string
+  hasToken: boolean
+  clearToken: boolean
+}
+
 export interface IssueView {
   id: string
   name: string
@@ -16,6 +24,7 @@ export interface IssueView {
 
 export interface AppConfig {
   jira: JiraConfig
+  ai: AiConfig
   views: IssueView[]
 }
 

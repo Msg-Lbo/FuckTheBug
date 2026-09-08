@@ -9,6 +9,9 @@ pub const CONFIG_VERSION: u8 = 2;
 /// JIRA Token在系统凭据库中的固定账户名。
 pub const TOKEN_ACCOUNT: &str = "jira-access-token";
 
+/// AI Token在系统凭据库中的固定账户名。
+pub const AI_TOKEN_ACCOUNT: &str = "ai-access-token";
+
 /// 系统凭据库服务名。
 pub const KEYRING_SERVICE: &str = "com.genata.bug-ticker";
 
@@ -18,6 +21,8 @@ pub const KEYRING_SERVICE: &str = "com.genata.bug-ticker";
 pub struct StoredAppConfig {
     pub version: u8,
     pub jira: StoredJiraConfig,
+    #[serde(default)]
+    pub ai: StoredAiConfig,
     pub views: Vec<IssueView>,
     pub window_position: Option<WindowPosition>,
 }
@@ -30,11 +35,22 @@ pub struct StoredJiraConfig {
     pub refresh_interval: f64,
 }
 
+/// 不包含Token的AI持久化配置。
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredAiConfig {
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub model: String,
+}
+
 /// 可公开给前端的应用配置。
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicAppConfig {
     pub jira: PublicJiraConfig,
+    pub ai: PublicAiConfig,
     pub views: Vec<IssueView>,
 }
 
@@ -44,6 +60,17 @@ pub struct PublicAppConfig {
 pub struct PublicJiraConfig {
     pub base_url: String,
     pub refresh_interval: f64,
+    pub token: String,
+    pub has_token: bool,
+    pub clear_token: bool,
+}
+
+/// 可公开给前端的AI配置。
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicAiConfig {
+    pub base_url: String,
+    pub model: String,
     pub token: String,
     pub has_token: bool,
     pub clear_token: bool,
@@ -275,6 +302,7 @@ impl Default for StoredAppConfig {
                 base_url: "https://jira.genata.net.cn".to_string(),
                 refresh_interval: 1.0,
             },
+            ai: StoredAiConfig::default(),
             views: vec![IssueView {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: "我的问题单".to_string(),
@@ -341,5 +369,16 @@ mod tests {
 
         assert!(issue.versions.is_empty());
         assert!(issue.platforms.is_empty());
+    }
+
+    #[test]
+    fn stored_config_defaults_missing_ai() {
+        let config: StoredAppConfig = serde_json::from_str(
+            r#"{"version":2,"jira":{"baseUrl":"https://jira.example.com","refreshInterval":1},"views":[{"id":"1","name":"我的问题单","jql":"assignee = currentUser()"}]}"#,
+        )
+        .expect("旧配置缺少AI字段时应可读取");
+
+        assert!(config.ai.base_url.is_empty());
+        assert!(config.ai.model.is_empty());
     }
 }

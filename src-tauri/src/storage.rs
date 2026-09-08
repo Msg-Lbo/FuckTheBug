@@ -10,8 +10,9 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::models::{
-    CONFIG_VERSION, IssueView, IssueViewKind, KEYRING_SERVICE, LegacyAppConfig, PublicAppConfig,
-    PublicJiraConfig, StoredAppConfig, TOKEN_ACCOUNT,
+    AI_TOKEN_ACCOUNT, CONFIG_VERSION, IssueView, IssueViewKind, KEYRING_SERVICE, LegacyAppConfig,
+    PublicAiConfig, PublicAppConfig, PublicJiraConfig, StoredAiConfig, StoredAppConfig,
+    TOKEN_ACCOUNT,
 };
 
 /// 应用共享状态。
@@ -20,7 +21,9 @@ pub struct AppState {
     pub config: Mutex<StoredAppConfig>,
     pub in_flight_views: Mutex<std::collections::HashSet<String>>,
     pub pending_ai_issue: Mutex<Option<String>>,
+    pub ai_stream_id: Mutex<u64>,
     pub http_client: reqwest::Client,
+    pub ai_http_client: reqwest::Client,
 }
 
 /// 初始化配置目录、迁移旧配置并创建共享状态。
@@ -43,13 +46,20 @@ pub fn initialize_state(app: &AppHandle) -> Result<AppState, String> {
         .user_agent("FuckTheBug/2.0")
         .build()
         .map_err(|error| format!("无法创建HTTP客户端：{error}"))?;
+    let ai_http_client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .user_agent("FuckTheBug/2.0")
+        .build()
+        .map_err(|error| format!("无法创建AI客户端：{error}"))?;
 
     Ok(AppState {
         config_path,
         config: Mutex::new(config),
         in_flight_views: Mutex::new(std::collections::HashSet::new()),
         pending_ai_issue: Mutex::new(None),
+        ai_stream_id: Mutex::new(0),
         http_client,
+        ai_http_client,
     })
 }
 
@@ -82,6 +92,13 @@ pub fn to_public_config(config: &StoredAppConfig) -> Result<PublicAppConfig, Str
             refresh_interval: config.jira.refresh_interval,
             token: String::new(),
             has_token: has_jira_token()?,
+            clear_token: false,
+        },
+        ai: PublicAiConfig {
+            base_url: config.ai.base_url.clone(),
+            model: config.ai.model.clone(),
+            token: String::new(),
+            has_token: has_ai_token()?,
             clear_token: false,
         },
         views: config.views.clone(),
@@ -135,11 +152,27 @@ pub fn to_stored_config(
         }
     }
 
+    let ai_base_url = public.ai.base_url.trim();
+    if ai_base_url.is_empty() {
+        return Err("请输入AI接口地址".to_string());
+    }
+    let ai_base_url = normalize_ai_url(ai_base_url)?;
+    if public.ai.model.trim().is_empty() || public.ai.model.chars().count() > 100 {
+        return Err("AI模型名称必须为1到100个字符".to_string());
+    }
+    if !public.ai.has_token && public.ai.token.is_empty() && !public.ai.clear_token {
+        return Err("请输入AI Token".to_string());
+    }
+
     Ok(StoredAppConfig {
         version: CONFIG_VERSION,
         jira: crate::models::StoredJiraConfig {
             base_url,
             refresh_interval: public.jira.refresh_interval,
+        },
+        ai: StoredAiConfig {
+            base_url: ai_base_url,
+            model: public.ai.model.trim().to_string(),
         },
         views: public.views.clone(),
         window_position: current.window_position.clone(),
@@ -148,17 +181,26 @@ pub fn to_stored_config(
 
 /// 保存或清除JIRA Token。
 pub fn update_jira_token(config: &PublicJiraConfig) -> Result<(), String> {
-    let entry = token_entry()?; // 系统凭据项
-    if config.clear_token {
+    update_secret_token(token_entry()?, config.clear_token, &config.token)
+}
+
+/// 保存或清除AI Token。
+pub fn update_ai_token(config: &PublicAiConfig) -> Result<(), String> {
+    update_secret_token(ai_token_entry()?, config.clear_token, &config.token)
+}
+
+/// 写入或删除系统凭据。
+fn update_secret_token(entry: Entry, clear_token: bool, token: &str) -> Result<(), String> {
+    if clear_token {
         match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => return Ok(()),
             Err(error) => return Err(format!("无法清除系统凭据：{error}")),
         }
     }
 
-    if !config.token.is_empty() {
+    if !token.is_empty() {
         entry
-            .set_password(&config.token)
+            .set_password(token)
             .map_err(|error| format!("无法写入系统凭据：{error}"))?;
     }
 
@@ -167,15 +209,35 @@ pub fn update_jira_token(config: &PublicJiraConfig) -> Result<(), String> {
 
 /// 从系统凭据库读取JIRA Token。
 pub fn read_jira_token() -> Result<String, String> {
-    token_entry()?.get_password().map_err(|error| match error {
-        keyring::Error::NoEntry => "尚未配置JIRA Token".to_string(),
+    read_secret_token(token_entry()?, "尚未配置JIRA Token")
+}
+
+/// 从系统凭据库读取AI Token。
+pub fn read_ai_token() -> Result<String, String> {
+    read_secret_token(ai_token_entry()?, "尚未配置AI Token")
+}
+
+/// 读取系统凭据。
+fn read_secret_token(entry: Entry, missing: &str) -> Result<String, String> {
+    entry.get_password().map_err(|error| match error {
+        keyring::Error::NoEntry => missing.to_string(),
         other => format!("无法读取系统凭据：{other}"),
     })
 }
 
 /// 判断系统凭据库是否已有JIRA Token。
 pub fn has_jira_token() -> Result<bool, String> {
-    match token_entry()?.get_password() {
+    has_secret_token(token_entry()?)
+}
+
+/// 判断系统凭据库是否已有AI Token。
+pub fn has_ai_token() -> Result<bool, String> {
+    has_secret_token(ai_token_entry()?)
+}
+
+/// 判断系统凭据是否存在。
+fn has_secret_token(entry: Entry) -> Result<bool, String> {
+    match entry.get_password() {
         Ok(_) => Ok(true),
         Err(keyring::Error::NoEntry) => Ok(false),
         Err(error) => Err(format!("无法读取系统凭据：{error}")),
@@ -184,12 +246,22 @@ pub fn has_jira_token() -> Result<bool, String> {
 
 /// 规范化并校验JIRA根地址。
 pub fn normalize_base_url(value: &str) -> Result<String, String> {
-    let mut url = Url::parse(value.trim()).map_err(|_| "JIRA地址格式不正确".to_string())?;
+    normalize_http_url(value, "JIRA地址")
+}
+
+/// 规范化并校验AI接口地址。
+pub fn normalize_ai_url(value: &str) -> Result<String, String> {
+    normalize_http_url(value, "AI接口地址")
+}
+
+/// 规范化并校验HTTP根地址。
+fn normalize_http_url(value: &str, label: &str) -> Result<String, String> {
+    let mut url = Url::parse(value.trim()).map_err(|_| format!("{label}格式不正确"))?;
     if !matches!(url.scheme(), "http" | "https") {
-        return Err("JIRA地址仅支持HTTP或HTTPS".to_string());
+        return Err(format!("{label}仅支持HTTP或HTTPS"));
     }
     if url.host_str().is_none() {
-        return Err("JIRA地址缺少主机名".to_string());
+        return Err(format!("{label}缺少主机名"));
     }
     url.set_query(None);
     url.set_fragment(None);
@@ -209,12 +281,24 @@ fn validate_stored_config(config: &StoredAppConfig) -> Result<(), String> {
     {
         return Err("配置中没有问题单视图".to_string());
     }
+    if !config.ai.base_url.is_empty() {
+        normalize_ai_url(&config.ai.base_url)?;
+        if config.ai.model.trim().is_empty() {
+            return Err("配置中的AI模型名称为空".to_string());
+        }
+    }
     Ok(())
 }
 
 /// 创建系统凭据库条目。
 fn token_entry() -> Result<Entry, String> {
     Entry::new(KEYRING_SERVICE, TOKEN_ACCOUNT)
+        .map_err(|error| format!("无法访问系统凭据库：{error}"))
+}
+
+/// 创建AI Token系统凭据库条目。
+fn ai_token_entry() -> Result<Entry, String> {
+    Entry::new(KEYRING_SERVICE, AI_TOKEN_ACCOUNT)
         .map_err(|error| format!("无法访问系统凭据库：{error}"))
 }
 
