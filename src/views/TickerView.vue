@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type CSSProperties } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { Archive, AlertCircle, RefreshCw, Settings, Sparkles, X } from '@lucide/vue'
+import { Archive, AlertCircle, Check, RefreshCw, Settings, Sparkles, StickyNote, Trash2, X } from '@lucide/vue'
 import {
   clearStashedIssues,
   fetchIssues,
@@ -10,17 +10,19 @@ import {
   openExternal,
   openSettingsWindow,
   resizeMainWindow,
+  saveIssueNote,
   saveMainWindowPosition,
   sendSystemNotification,
   stashIssue as persistStashedIssue,
   startMainDragging,
   unstashIssue as persistUnstashedIssue,
 } from '../api'
-import type { AppConfig, IssueView, ViewRuntime } from '../types'
+import type { AppConfig, IssueItem, IssueView, ViewRuntime } from '../types'
 
 const config = ref<AppConfig>({
   jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
   ai: { baseUrl: '', model: '', token: '', hasToken: false, clearToken: false, skill: '', defaultSkill: '', outputFormat: '' },
+  notes: {},
   views: [],
 }) // 应用配置
 const activeViewId = ref<string | null>(null) // 当前展开视图
@@ -31,6 +33,8 @@ const refreshTimers = new Map<string, number>() // 各视图刷新定时器
 const loadError = ref('') // 配置加载错误
 let unlistenConfig: UnlistenFn | null = null // 配置事件解绑函数
 let dragState: { viewId: string; startX: number; startY: number; moved: boolean } | null = null // 拖动状态
+const contextMenu = reactive({ visible: false, x: 0, y: 0, issueKey: '' }) // 问题单右键菜单
+const noteEditor = reactive({ visible: false, issueKey: '', text: '' }) // 备注编辑弹层
 const notificationWelcomeKey = 'fuck-the-bug:notification-welcome:v1' // 原生通知启用提示标识
 const projectPalette = [
   { accent: '#63a8dc', surface: '#1a2b37', border: '#365f7b', text: '#a9d4f2' },
@@ -404,16 +408,75 @@ async function stashIssue(issueKey: string): Promise<void> {
 }
 
 /**
- * 处理问题单右键按下事件
+ * 在鼠标位置弹出问题单右键菜单
  * @param event - 鼠标事件
- * @param issueKey - 问题单 Key
+ * @param issue - 问题单
  */
-function handleIssueMouseDown(event: MouseEvent, issueKey: string): void {
-  if (event.button !== 2) return
-  event.preventDefault()
-  event.stopPropagation()
+function handleIssueContextMenu(event: MouseEvent, issue: IssueItem): void {
+  const menuWidth = 178 // 菜单宽度
+  const menuHeight = 116 // 菜单高度
+  contextMenu.x = Math.min(event.clientX, window.innerWidth - menuWidth - 8)
+  contextMenu.y = Math.min(event.clientY, window.innerHeight - menuHeight - 8)
+  contextMenu.issueKey = issue.key
+  contextMenu.visible = true
+}
+
+/**
+ * 关闭问题单右键菜单
+ */
+function closeContextMenu(): void {
+  contextMenu.visible = false
+}
+
+/**
+ * 处理全局按键，Esc 关闭右键菜单与备注弹层
+ * @param event - 键盘事件
+ */
+function handleGlobalKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return
+  closeContextMenu()
+  noteEditor.visible = false
+}
+
+/**
+ * 打开备注编辑弹层
+ */
+function openNoteEditor(): void {
+  noteEditor.issueKey = contextMenu.issueKey
+  noteEditor.text = config.value.notes[contextMenu.issueKey] ?? ''
+  noteEditor.visible = true
+  closeContextMenu()
+}
+
+/**
+ * 保存备注并同步到本地配置
+ */
+async function saveNote(): Promise<void> {
+  try {
+    config.value.notes = await saveIssueNote(noteEditor.issueKey, noteEditor.text)
+    noteEditor.visible = false
+  } catch (error) {
+    if (activeRuntime.value) activeRuntime.value.error = String(error)
+  }
+}
+
+/**
+ * 执行右键菜单的暂存或移出暂存
+ */
+function handleContextStash(): void {
+  const issueKey = contextMenu.issueKey // 菜单指向的问题单
+  closeContextMenu()
   if (activeView.value?.kind === 'stash') void unstashIssue(issueKey)
   else void stashIssue(issueKey)
+}
+
+/**
+ * 执行右键菜单的AI提示词生成
+ */
+function handleContextAi(): void {
+  const issueKey = contextMenu.issueKey // 菜单指向的问题单
+  closeContextMenu()
+  void handleOpenAi(issueKey)
 }
 
 /**
@@ -472,6 +535,8 @@ onMounted(async () => {
   await initializeNotifications()
   await loadConfig()
   unlistenConfig = await listen('config-updated', () => void loadConfig())
+  window.addEventListener('pointerdown', closeContextMenu)
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 onBeforeUnmount(() => {
@@ -479,6 +544,8 @@ onBeforeUnmount(() => {
   unlistenConfig?.()
   window.removeEventListener('pointermove', handlePointerMove)
   window.removeEventListener('pointerup', handlePointerUp)
+  window.removeEventListener('pointerdown', closeContextMenu)
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
@@ -605,12 +672,14 @@ onBeforeUnmount(() => {
             :style="getProjectStyle(issue.projectKey)"
             type="button"
             @click="handleOpenExternal(issue.link)"
-            @mousedown="handleIssueMouseDown($event, issue.key)"
-            @contextmenu.prevent
+            @contextmenu.prevent="handleIssueContextMenu($event, issue)"
           >
             <span class="bug-row__main">
               <strong><span class="issue-key">{{ issue.key }}</span>{{ issue.title }}</strong>
               <span class="bug-row__meta">
+                <span v-if="config.notes[issue.key]" class="note-tag" :title="config.notes[issue.key]">
+                  <StickyNote :size="11" />备注
+                </span>
                 <span class="project-tag" :title="issue.projectName">{{ issue.projectKey }}</span>
                 <span v-if="issue.issueType">{{ issue.issueType }}</span>
                 <span v-if="issue.status">{{ issue.status }}</span>
@@ -630,5 +699,49 @@ onBeforeUnmount(() => {
         </template>
       </div>
     </section>
+
+    <div
+      v-if="contextMenu.visible"
+      class="context-menu"
+      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+      @pointerdown.stop
+    >
+      <button class="context-menu__item" type="button" @click="openNoteEditor">
+        <StickyNote :size="15" />备注
+      </button>
+      <button class="context-menu__item" type="button" @click="handleContextStash">
+        <Archive v-if="activeView?.kind !== 'stash'" :size="15" />
+        <Trash2 v-else :size="15" />
+        {{ activeView?.kind === 'stash' ? '移出暂存' : '暂存问题单' }}
+      </button>
+      <button class="context-menu__item" type="button" @click="handleContextAi">
+        <Sparkles :size="15" />生成AI提示词
+      </button>
+    </div>
+
+    <div v-if="noteEditor.visible" class="note-overlay" @pointerdown.self="noteEditor.visible = false">
+      <section class="note-dialog">
+        <header class="note-dialog__header">
+          <strong>问题单备注</strong>
+          <button class="icon-button" type="button" title="关闭" @click="noteEditor.visible = false">
+            <X :size="16" />
+          </button>
+        </header>
+        <span class="note-dialog__key">{{ noteEditor.issueKey }}</span>
+        <textarea
+          v-model="noteEditor.text"
+          class="note-dialog__input"
+          rows="6"
+          maxlength="2000"
+          placeholder="记录补充信息、复现细节或处理进度，生成的AI提示词会带上这段备注"
+        />
+        <footer class="note-dialog__footer">
+          <button class="text-button" type="button" @click="noteEditor.visible = false">取消</button>
+          <button class="command-button command-button--primary" type="button" @click="saveNote">
+            <Check :size="15" />保存备注
+          </button>
+        </footer>
+      </section>
+    </div>
   </main>
 </template>

@@ -45,6 +45,16 @@ export function clearStashedIssues(): Promise<IssueView> {
 }
 
 /**
+ * 保存或清除问题单备注
+ * @param issueKey - 问题单 Key
+ * @param note - 备注内容，空字符串表示清除
+ * @returns 更新后的全部备注
+ */
+export function saveIssueNote(issueKey: string, note: string): Promise<Record<string, string>> {
+  return invoke<Record<string, string>>('save_issue_note', { issueKey, note })
+}
+
+/**
  * 由安装后的Tauri应用发送Windows系统通知
  * @param title - 通知标题
  * @param body - 通知正文

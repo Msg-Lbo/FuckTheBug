@@ -10,6 +10,7 @@ import type { AppConfig } from '../types'
 const config = ref<AppConfig>({
   jira: { baseUrl: '', refreshInterval: 1, token: '', hasToken: false, clearToken: false },
   ai: { baseUrl: '', model: '', token: '', hasToken: false, clearToken: false, skill: '', defaultSkill: '', outputFormat: '' },
+  notes: {},
   views: [],
 }) // 表单配置
 const loading = ref(true) // 加载状态

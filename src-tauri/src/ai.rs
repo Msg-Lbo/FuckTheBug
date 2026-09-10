@@ -106,7 +106,7 @@ pub async fn generate_ai_prompt(
     app.emit("ai-prompt-context", &issue)
         .map_err(|error| format!("无法发送问题单详情：{error}"))?;
 
-    let (base_url, model, skill) = {
+    let (base_url, model, skill, note) = {
         let config = state
             .config
             .lock()
@@ -115,13 +115,14 @@ pub async fn generate_ai_prompt(
             config.ai.base_url.clone(),
             config.ai.model.clone(),
             config.ai.skill.clone(),
+            config.notes.get(&issue.key).cloned().unwrap_or_default(),
         )
     };
     if base_url.is_empty() || model.is_empty() {
         return Err("尚未配置AI接口地址或模型".to_string());
     }
     let token = read_ai_token()?;
-    let user_content = build_user_content(&issue);
+    let user_content = build_user_content(&issue, &note);
     let system_prompt = build_system_prompt(&skill);
     let mut response = state
         .ai_http_client
@@ -222,7 +223,7 @@ fn build_system_prompt(skill: &str) -> String {
 }
 
 /// 组装发给模型的问题单文本和截图。
-fn build_user_content(issue: &IssueDetail) -> Value {
+fn build_user_content(issue: &IssueDetail, note: &str) -> Value {
     let mut lines = vec![
         format!("问题单：{}", issue.key),
         format!("标题：{}", issue.title),
@@ -244,6 +245,11 @@ fn build_user_content(issue: &IssueDetail) -> Value {
             issue.description.clone()
         },
     ];
+    if !note.trim().is_empty() {
+        lines.push(String::new());
+        lines.push("本地备注：".to_string());
+        lines.push(note.trim().to_string());
+    }
     if !issue.environment.is_empty() {
         lines.push(String::new());
         lines.push("环境：".to_string());

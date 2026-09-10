@@ -114,14 +114,7 @@ pub fn open_ai_chat_window(
     issue_key: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let valid = issue_key.len() <= 32
-        && issue_key.contains('-')
-        && issue_key
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '-');
-    if !valid {
-        return Err("问题单标识格式不正确".to_string());
-    }
+    crate::jira::validate_issue_key(&issue_key)?;
     *state
         .pending_ai_issue
         .lock()

@@ -104,6 +104,7 @@ pub fn to_public_config(config: &StoredAppConfig) -> Result<PublicAppConfig, Str
             default_skill: DEFAULT_AI_SKILL.to_string(),
             output_format: AI_OUTPUT_FORMAT.to_string(),
         },
+        notes: config.notes.clone(),
         views: config.views.clone(),
     })
 }
@@ -185,6 +186,7 @@ pub fn to_stored_config(
             model: public.ai.model.trim().to_string(),
             skill: skill.to_string(),
         },
+        notes: current.notes.clone(),
         views: public.views.clone(),
         window_position: current.window_position.clone(),
     })

@@ -1183,6 +1183,110 @@ button {
   }
 }
 
+.note-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  color: #edc38c;
+  background: #33271a;
+  border: 1px solid #765630;
+  border-radius: 3px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: #232a30;
+  border: 1px solid #3f4a53;
+  border-radius: 6px;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 45%);
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    color: #d6dee4;
+    font-size: 12px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      color: #eaf4fb;
+      background: #303a42;
+      outline: none;
+    }
+  }
+}
+
+.note-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(10 13 16 / 62%);
+}
+
+.note-dialog {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: #232a30;
+  border: 1px solid #3f4a53;
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 50%);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+
+  &__key {
+    color: #78a9d5;
+    font-family: "Cascadia Mono", monospace;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  &__input {
+    width: 100%;
+    padding: 8px 10px;
+    color: #eef1f3;
+    font-size: 12px;
+    resize: vertical;
+    background: #1b2126;
+    border: 1px solid #3f4a53;
+    border-radius: 5px;
+
+    &:focus {
+      border-color: #60809a;
+      outline: none;
+    }
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .counter--new::before {
     animation: none;

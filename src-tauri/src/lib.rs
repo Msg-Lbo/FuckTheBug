@@ -5,11 +5,14 @@ mod storage;
 mod tray;
 mod windows;
 
+use std::collections::HashMap;
+
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::{
-    models::{IssueItem, IssueView, IssueViewKind, PublicAppConfig},
+    jira::validate_issue_key,
+    models::{IssueItem, IssueView, IssueViewKind, NOTE_MAX_CHARS, PublicAppConfig},
     storage::{
         AppState, initialize_state, to_public_config, to_stored_config, update_ai_token,
         update_jira_token, write_stored_config,
@@ -84,6 +87,32 @@ fn clear_stashed_issues(state: tauri::State<'_, AppState>) -> Result<IssueView, 
         .ok_or_else(|| "暂存视图不存在".to_string())?;
     stash_view.issues.clear();
     let result = stash_view.clone(); // 写入后的暂存视图
+    write_stored_config(&state.config_path, &config)?;
+    Ok(result)
+}
+
+/// 保存或清除问题单备注。
+#[tauri::command]
+fn save_issue_note(
+    issue_key: String,
+    note: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<HashMap<String, String>, String> {
+    validate_issue_key(&issue_key)?;
+    let trimmed = note.trim(); // 去掉首尾空白的备注
+    if trimmed.chars().count() > NOTE_MAX_CHARS {
+        return Err(format!("备注不能超过{NOTE_MAX_CHARS}个字符"));
+    }
+    let mut config = state
+        .config
+        .lock()
+        .map_err(|_| "配置锁已损坏".to_string())?;
+    if trimmed.is_empty() {
+        config.notes.remove(&issue_key);
+    } else {
+        config.notes.insert(issue_key, trimmed.to_string());
+    }
+    let result = config.notes.clone(); // 写入后的全部备注
     write_stored_config(&state.config_path, &config)?;
     Ok(result)
 }
@@ -203,6 +232,7 @@ pub fn run() {
             stash_issue,
             unstash_issue,
             clear_stashed_issues,
+            save_issue_note,
             send_system_notification,
             jira::fetch_issues,
             jira::fetch_issue_detail,

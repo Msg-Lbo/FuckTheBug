@@ -57,9 +57,14 @@ pub struct StoredAppConfig {
     pub jira: StoredJiraConfig,
     #[serde(default)]
     pub ai: StoredAiConfig,
+    #[serde(default)]
+    pub notes: HashMap<String, String>,
     pub views: Vec<IssueView>,
     pub window_position: Option<WindowPosition>,
 }
+
+/// 问题单备注最大字符数。
+pub const NOTE_MAX_CHARS: usize = 2000;
 
 /// 不包含Token的JIRA持久化配置。
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -87,6 +92,7 @@ pub struct StoredAiConfig {
 pub struct PublicAppConfig {
     pub jira: PublicJiraConfig,
     pub ai: PublicAiConfig,
+    pub notes: HashMap<String, String>,
     pub views: Vec<IssueView>,
 }
 
@@ -342,6 +348,7 @@ impl Default for StoredAppConfig {
                 refresh_interval: 1.0,
             },
             ai: StoredAiConfig::default(),
+            notes: HashMap::new(),
             views: vec![IssueView {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: "我的问题单".to_string(),

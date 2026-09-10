@@ -160,7 +160,7 @@ fn extract_versions(description: &str) -> Vec<String> {
 ///
 /// # 参数
 /// * `issue_key` - 问题单 Key
-fn validate_issue_key(issue_key: &str) -> Result<(), String> {
+pub fn validate_issue_key(issue_key: &str) -> Result<(), String> {
     let valid = issue_key.len() <= 32
         && issue_key.contains('-')
         && issue_key

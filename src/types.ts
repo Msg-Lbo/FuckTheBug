@@ -28,6 +28,7 @@ export interface IssueView {
 export interface AppConfig {
   jira: JiraConfig
   ai: AiConfig
+  notes: Record<string, string>
   views: IssueView[]
 }
 
