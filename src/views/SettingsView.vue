@@ -137,16 +137,19 @@ async function handleUpdateAction(): Promise<void> {
 }
 
 /**
- * 添加一个JQL视图
+ * 添加一个JQL视图，并保证排在暂存视图之前
  */
 function addView(): void {
-  config.value.views.push({
+  const view = {
     id: crypto.randomUUID(),
     name: '',
-    kind: 'jira',
+    kind: 'jira' as const,
     jql: 'assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC, updated DESC',
     issues: [],
-  })
+  } // 新增的JQL视图
+  const stashIndex = config.value.views.findIndex((item) => item.kind === 'stash') // 暂存视图索引
+  if (stashIndex === -1) config.value.views.push(view)
+  else config.value.views.splice(stashIndex, 0, view)
 }
 
 /**

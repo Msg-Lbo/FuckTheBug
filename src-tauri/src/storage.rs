@@ -66,7 +66,7 @@ pub fn initialize_state(app: &AppHandle) -> Result<AppState, String> {
 /// 读取并验证持久化配置。
 pub fn read_stored_config(path: &Path) -> Result<StoredAppConfig, String> {
     let text = fs::read_to_string(path).map_err(|error| format!("无法读取配置文件：{error}"))?;
-    let config: StoredAppConfig =
+    let mut config: StoredAppConfig =
         serde_json::from_str(&text).map_err(|error| format!("配置文件格式错误：{error}"))?;
 
     if config.version != CONFIG_VERSION {
@@ -74,7 +74,18 @@ pub fn read_stored_config(path: &Path) -> Result<StoredAppConfig, String> {
     }
 
     validate_stored_config(&config)?;
+    move_stash_last(&mut config.views);
     Ok(config)
+}
+
+/// 将暂存视图移动到视图列表末尾。
+pub fn move_stash_last(views: &mut Vec<IssueView>) {
+    let stash_index = match views.iter().position(|view| view.kind == IssueViewKind::Stash) {
+        Some(index) => index, // 暂存视图索引
+        None => return,
+    };
+    let stash_view = views.remove(stash_index); // 待后移的暂存视图
+    views.push(stash_view);
 }
 
 /// 将持久化配置写入用户配置目录。
@@ -175,6 +186,8 @@ pub fn to_stored_config(
         return Err(format!("AI Skill不能超过{AI_SKILL_MAX_CHARS}个字符"));
     }
 
+    let mut views = public.views.clone(); // 视图列表
+    move_stash_last(&mut views);
     Ok(StoredAppConfig {
         version: CONFIG_VERSION,
         jira: crate::models::StoredJiraConfig {
@@ -187,7 +200,7 @@ pub fn to_stored_config(
             skill: skill.to_string(),
         },
         notes: current.notes.clone(),
-        views: public.views.clone(),
+        views,
         window_position: current.window_position.clone(),
     })
 }
@@ -432,5 +445,34 @@ mod tests {
     #[test]
     fn rejects_non_http_jira_url() {
         assert!(normalize_base_url("file:///tmp/config").is_err());
+    }
+
+    #[test]
+    fn moves_stash_view_to_last() {
+        let jira_view = |id: &str| IssueView {
+            id: id.to_string(),
+            name: id.to_string(),
+            kind: IssueViewKind::Jira,
+            jql: "assignee = currentUser()".to_string(),
+            issues: Vec::new(),
+        };
+        let mut views = vec![
+            jira_view("view-1"),
+            IssueView {
+                id: "stash-1".to_string(),
+                name: "暂存".to_string(),
+                kind: IssueViewKind::Stash,
+                jql: String::new(),
+                issues: Vec::new(),
+            },
+            jira_view("view-2"),
+        ];
+
+        move_stash_last(&mut views);
+
+        assert_eq!(
+            views.iter().map(|view| view.id.as_str()).collect::<Vec<_>>(),
+            vec!["view-1", "view-2", "stash-1"]
+        );
     }
 }
